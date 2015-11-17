@@ -1,4 +1,5 @@
 # BeliefPropagation
+Poorly tested, use it at your own risk.
 
 ## KSAT
 Solve random instance with BP + reinforcement
