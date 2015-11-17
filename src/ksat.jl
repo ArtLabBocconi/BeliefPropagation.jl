@@ -233,12 +233,22 @@ function update!(v::Var, reinf::Float64 = 0.)
     #### update reinforcement ######
     if πp < πm
         p = πp / (πp+πm)
+        #vecchio reinforcement
+        # v.ηreinfp = reinf * (1 - 2p) / (1-p)
+
         # p = p^reinf /(p^reinf+(1-p)^reinf)
-        v.ηreinfp = reinf * (1 - 2*p) / (1-p)
+        v.ηreinfp = 1 - (p/(1-p))^reinf
+
         v.ηreinfm = 0
     else
         q = πm / (πp+πm)
-        v.ηreinfm = reinf * (1 - 2*q) / (1-q)
+        #vecchio reinforcement
+        # v.ηreinfm = reinf * (1 - 2q) / (1-q)
+
+        # q = q^reinf /(q^reinf+(1-q)^reinf)
+        # v.ηreinfm = (1 - 2q) / (1-q)
+        v.ηreinfm = 1 - (q/(1-q))^reinf
+
         v.ηreinfp = 0
     end
     #########################
@@ -262,28 +272,27 @@ function oneBPiter!(g::FactorGraph, reinf::Float64=0.)
     Δ
 end
 
-function update_reinforcement!(reinfp::ReinfParams)
-    if reinfp.wait_count < 4
-        reinfp.wait_count += 1
+function update_reinforcement!(reinfpar::ReinfParams)
+    if reinfpar.wait_count < 4
+        reinfpar.wait_count += 1
     else
-        reinfp.reinf = 1 - (1-reinfp.reinf) * (1-reinfp.step)
+        reinfpar.reinf = 1 - (1-reinfpar.reinf) * (1-reinfpar.step)
     end
 end
 
 function getconfig(g::FactorGraph)
     m =  [m for m in mags(g)]
-    assert(all(m .!= 0))
-    return Int[round(Int, sign(m)) for m in m]
+    return Int[1-2signbit(m) for m in m]
 end
 
-function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5, reinfp::ReinfParams=ReinfParams())
+function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5, reinfpar::ReinfParams=ReinfParams())
     for it=1:maxiters
         write("it=$it ... ")
-        Δ = oneBPiter!(g, reinfp.reinf)
+        Δ = oneBPiter!(g, reinfpar.reinf)
         σ = getconfig(g)
         E = energy(g.cnf, σ)
-        @printf("reinf=%.3f E=%d  Δ=%f \n",reinfp.reinf, E, Δ)
-        update_reinforcement!(reinfp)
+        @printf("reinf=%.3f E=%d  Δ=%f \n",reinfpar.reinf, E, Δ)
+        update_reinforcement!(reinfpar)
         if E == 0
             println("Found Solution!")
             break
@@ -342,8 +351,8 @@ end
 function mag(v::Var)
     πp, πm, _, _ = πpm(v)
     # pup = P(σ_i = 1)
-    pup = πp / (πm + πp)
-    m = 2pup - 1
+    p = πp / (πm + πp)
+    m = 2p - 1
     return m
 end
 
@@ -368,9 +377,9 @@ function solveKSAT(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-6,
     if seed > 0
         srand(seed)
     end
-    reinfp = ReinfParams(reinf, reinf_step)
+    reinfpar = ReinfParams(reinf, reinf_step)
     g = FactorGraphKSAT(cnf)
     initrand!(g)
-    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfp=reinfp)
+    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar)
     return getconfig(g)
 end
