@@ -1,25 +1,3 @@
-module BP
-Copyright (c) 2015 Carlo Lucibello
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-
 using MacroUtils
 include("cnf.jl")
 typealias MessU Float64  # ̂ν(a→i) = P(σ_i != J_ai)
@@ -292,21 +270,17 @@ function update_reinforcement!(reinfp::ReinfParams)
     end
 end
 
+function getconfig(g::FactorGraph)
+    m =  [m for m in mags(g)]
+    assert(all(m .!= 0))
+    return Int[round(Int, sign(m)) for m in m]
+end
+
 function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5, reinfp::ReinfParams=ReinfParams())
     for it=1:maxiters
         write("it=$it ... ")
         Δ = oneBPiter!(g, reinfp.reinf)
-
-        m =  [m for m in mags(g)]
-        assert(all(m .!= 0))
-        # try
-        #     assert(all(isfinite(m)))
-        # catch
-        #     println("Got some NaN or Inf. Starting over...")
-        #     decrease_reinforcement!(g, reinfp)
-        #     continue
-        # end
-        σ = Int[round(Int, sign(m)) for m in m]
+        σ = getconfig(g)
         E = energy(g.cnf, σ)
         @printf("reinf=%.3f E=%d  Δ=%f \n",reinfp.reinf, E, Δ)
         update_reinforcement!(reinfp)
@@ -375,20 +349,20 @@ end
 
 mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
 
-function mainBP(cnfname::AbstractString; kw...)
+function solveKSAT(cnfname::AbstractString; kw...)
     cnf = readcnf(cnfname)
-    mainBP(cnf; kw...)
+    solveKSAT(cnf; kw...)
 end
 
-function mainBP(; N::Int=1000, α::Float64=3., k::Int = 4, seed_cnf::Int=-1, kw...)
+function solveKSAT(; N::Int=1000, α::Float64=3., k::Int = 4, seed_cnf::Int=-1, kw...)
     if seed_cnf > 0
         srand(seed_cnf)
     end
     cnf = CNF(N, k, α)
-    mainBP(cnf; kw...)
+    solveKSAT(cnf; kw...)
 end
 
-function mainBP(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-6,
+function solveKSAT(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-6,
                 reinf::Float64 = 0., reinf_step::Float64= 0.01,
                 seed::Int = -1)
     if seed > 0
@@ -398,7 +372,5 @@ function mainBP(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-6,
     g = FactorGraphKSAT(cnf)
     initrand!(g)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfp=reinfp)
-    return g, mags(g)
+    return getconfig(g)
 end
-
-end #module
