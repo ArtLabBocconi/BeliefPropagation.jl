@@ -107,7 +107,8 @@ type ReinfParams
     reinf::Float64
     step::Float64
     wait_count::Int
-    ReinfParams(reinf=0., step = 0.) = new(reinf, step, 0)
+    tγ::Float64
+    ReinfParams(reinf=0., step = 0., γ = 0.) = new(reinf, step, 0, tanh(γ))
 end
 
 deg(f::Fact) = length(f.ηlist)
@@ -193,7 +194,7 @@ function update!(f::Fact)
     Δ
 end
 
-function update!(v::Var, reinf::Float64 = 0.)
+function update!(v::Var, reinf::Float64 = 0., tγ::Float64 = 0.)
     #TODO check del denominatore=0
     @extract v ηlistp ηlistm πlistp πlistm
     Δ = 1.
@@ -230,34 +231,50 @@ function update!(v::Var, reinf::Float64 = 0.)
     end
     ###############
 
-    #### update reinforcement ######
+    # #### update reinforcement ######
+    # if πp < πm
+    #     p = πp / (πp+πm)
+    #     #vecchio reinforcement
+    #     # v.ηreinfp = reinf * (1 - 2p) / (1-p)
+    #
+    #     # p = p^reinf /(p^reinf+(1-p)^reinf)
+    #     v.ηreinfp = 1 - (p/(1-p))^reinf
+    #
+    #     v.ηreinfm = 0
+    # else
+    #     q = πm / (πp+πm)
+    #     #vecchio reinforcement
+    #     # v.ηreinfm = reinf * (1 - 2q) / (1-q)
+    #
+    #     #nuovo reinforcement
+    #     # q = q^reinf /(q^reinf+(1-q)^reinf)
+    #     # v.ηreinfm = (1 - 2q) / (1-q)
+    #     v.ηreinfm = 1 - (q/(1-q))^reinf
+    #
+    #     v.ηreinfp = 0
+    # end
+    # #########################
+
+
+    #### update pseudo-reinforcement ######
+    πpR = πp / (1-v.ηreinfp)
+    πmR = πm / (1-v.ηreinfm)
+    mγ = (πpR-πmR) / (πpR+πmR) * tγ
+    pp = (1+mγ)^reinf
+    mm = (1-mγ)^reinf
+    mR = tγ * (pp-mm) / (pp+mm)
     if πp < πm
-        p = πp / (πp+πm)
-        #vecchio reinforcement
-        # v.ηreinfp = reinf * (1 - 2p) / (1-p)
-
-        # p = p^reinf /(p^reinf+(1-p)^reinf)
-        v.ηreinfp = 1 - (p/(1-p))^reinf
-
+        v.ηreinfp = 2mR / (mR - 1)
         v.ηreinfm = 0
     else
-        q = πm / (πp+πm)
-        #vecchio reinforcement
-        # v.ηreinfm = reinf * (1 - 2q) / (1-q)
-
-        #nuovo reinforcement
-        # q = q^reinf /(q^reinf+(1-q)^reinf)
-        # v.ηreinfm = (1 - 2q) / (1-q)
-        v.ηreinfm = 1 - (q/(1-q))^reinf
-
+        v.ηreinfm = 2mR / (1 + mR)
         v.ηreinfp = 0
     end
     #########################
-
     Δ
 end
 
-function oneBPiter!(g::FactorGraph, reinf::Float64=0.)
+function oneBPiter!(g::FactorGraph, reinf::Float64=0., tγ::Float64=0.)
     Δ = 0.
 
     for a=randperm(g.M)
@@ -266,7 +283,7 @@ function oneBPiter!(g::FactorGraph, reinf::Float64=0.)
     end
 
     for i=randperm(g.N)
-        d = update!(g.vnodes[i], reinf)
+        d = update!(g.vnodes[i], reinf, tγ)
         Δ = max(Δ, d)
     end
 
@@ -289,7 +306,7 @@ end
 function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5, reinfpar::ReinfParams=ReinfParams())
     for it=1:maxiters
         write("it=$it ... ")
-        Δ = oneBPiter!(g, reinfpar.reinf)
+        Δ = oneBPiter!(g, reinfpar.reinf, reinfpar.tγ)
         σ = getconfig(g)
         E = energy(g.cnf, σ)
         @printf("reinf=%.3f E=%d  Δ=%f \n",reinfpar.reinf, E, Δ)
@@ -373,12 +390,12 @@ function solveKSAT(; N::Int=1000, α::Float64=3., k::Int = 4, seed_cnf::Int=-1, 
 end
 
 function solveKSAT(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-6,
-                reinf::Float64 = 0., reinf_step::Float64= 0.01,
+                reinf::Float64 = 0., reinf_step::Float64= 0., γ::Float64 = 0.,
                 seed::Int = -1)
     if seed > 0
         srand(seed)
     end
-    reinfpar = ReinfParams(reinf, reinf_step)
+    reinfpar = ReinfParams(reinf, reinf_step, γ)
     g = FactorGraphKSAT(cnf)
     initrand!(g)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar)

@@ -13,3 +13,7 @@ Read file in CNF format and solve with BP + reinforcement
 ```
 
 If having errors, try to reduce `reinf_step`.
+
+## Ising
+
+BP on pairwise Ising. Preliminary work
