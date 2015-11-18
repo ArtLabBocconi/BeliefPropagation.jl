@@ -45,7 +45,10 @@ type FactorGraphKSAT <: FactorGraph
     M::Int
     fnodes::Vector{Fact}
     vnodes::Vector{Var}
+    σ::Vector{Int}
     cnf::CNF
+    fperm::Vector{Int}
+    vperm::Vector{Int}
 
     function FactorGraphKSAT(cnf::CNF)
         @extract cnf M N clauses
@@ -99,7 +102,10 @@ type FactorGraphKSAT <: FactorGraph
                 end
             end
         end
-        new(N, M, fnodes, vnodes, cnf)
+        σ = ones(Int, N)
+        fperm = collect(1:M)
+        vperm = collect(1:N)
+        new(N, M, fnodes, vnodes, σ, cnf, fperm, vperm)
     end
 end
 
@@ -170,7 +176,7 @@ function update!(f::Fact)
     η = 1.
     eps = 1e-15
     nzeros = 0
-    for i=1:deg(f)
+    @inbounds for i=1:deg(f)
         if πlist[i] > eps
             η *= πlist[i]
         else
@@ -178,7 +184,7 @@ function update!(f::Fact)
             nzeros+=1
         end
     end
-    for i=1:deg(f)
+    @inbounds for i=1:deg(f)
         if nzeros == 0
             ηi = η / πlist[i]
         elseif nzeros == 1 && πlist[i] < eps
@@ -200,10 +206,11 @@ function update!(v::Var, reinf::Float64 = 0.)
     eps = 1e-15
 
     ### compute total fields
-    πp, πm, nzerosp, nzerosm = πpm(v)
+    #πp, πm, nzerosp, nzerosm = πpm(v)
+    πp, πm = πpm(v)
 
     ### compute cavity fields
-    for i=1:degp(v)
+    @inbounds for i=1:degp(v)
         # if nzerosp == 0
             πpi = πp / (1-ηlistp[i])
         # elseif (nzerosp == 1) && (1-ηlistp[i] < eps)
@@ -216,7 +223,7 @@ function update!(v::Var, reinf::Float64 = 0.)
         # Δ = max(Δ, abs(πlistp[i][] - old))
     end
 
-    for i=1:degm(v)
+    @inbounds for i=1:degm(v)
         # if nzerosm == 0
             πmi = πm / (1-ηlistm[i])
         # elseif (nzerosm == 1) && (1-ηlistm[i] < eps)
@@ -253,23 +260,26 @@ function update!(v::Var, reinf::Float64 = 0.)
     end
     #########################
 
-    Δ
+    return Δ
 end
 
 function oneBPiter!(g::FactorGraph, reinf::Float64=0.)
-    Δ = 0.
+    @extract g fperm vperm
+    Δ = 1.
 
-    for a=randperm(g.M)
+    shuffle!(fperm)
+    @inbounds for a in fperm
         d = update!(g.fnodes[a])
-        Δ = max(Δ, d)
+        #Δ = max(Δ, d)
     end
 
-    for i=randperm(g.N)
+    shuffle!(vperm)
+    @inbounds for i in vperm
         d = update!(g.vnodes[i], reinf)
-        Δ = max(Δ, d)
+        #Δ = max(Δ, d)
     end
 
-    Δ
+    return Δ
 end
 
 function update_reinforcement!(reinfpar::ReinfParams)
@@ -281,15 +291,22 @@ function update_reinforcement!(reinfpar::ReinfParams)
 end
 
 function getconfig(g::FactorGraph)
-    m =  [m for m in mags(g)]
-    return Int[1-2signbit(m) for m in m]
+    return Int[1-2signbit(mag(v)) for v in g.vnodes]
+end
+
+function getconfig!(g::FactorGraph)
+    @extract g N vnodes σ
+    @inbounds for i = 1:N
+        σ[i] = 1 - 2signbit(mag(vnodes[i]))
+    end
+    return σ
 end
 
 function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5, reinfpar::ReinfParams=ReinfParams())
     for it=1:maxiters
         write("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.reinf)
-        σ = getconfig(g)
+        σ = getconfig!(g)
         E = energy(g.cnf, σ)
         @printf("reinf=%.3f E=%d  Δ=%f \n",reinfpar.reinf, E, Δ)
         update_reinforcement!(reinfpar)
@@ -305,58 +322,57 @@ function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5, reinfp
 end
 
 function energy(cnf::CNF, σ)
-    E = 0
-    for c in cnf.clauses
-        issatisfied = false
+    @extract cnf M clauses
+    E = M
+    @inbounds for c in clauses
         for i in c
             if sign(i) == σ[abs(i)]
-                issatisfied = true
+                E -= 1
+                break
             end
         end
-        E += issatisfied ? 0 : 1
     end
-    E
+    return E
 end
 
-function πpm(v::Var)
-    @extract v ηlistp ηlistm
+@inline function πpm(v::Var)
+    @extract v ηlistp ηlistm ηreinfp ηreinfm
     eps = 1e-15
     nzp = 0
     nzm = 0
     πp = 1.
 
-    for η in ηlistp
+    @inbounds for j in 1:length(ηlistp)
     # if 1 - ηlistp[j] > eps
-        πp *= 1 - η
+        πp *= 1 - ηlistp[j]
     # else
     #     # println("there")
     #     nzp += 1
     # end
     end
     πm = 1.
-    for η in ηlistm
+    @inbounds for j in 1:length(ηlistm)
     # if 1 - ηlistm[j] > eps
-        πm *= 1 - η
+        πm *= 1 - ηlistm[j]
     # else
     #     nzm += 1
     # end
     end
-    (nzp > 0 && nzm > 0) && exit("contradiction")
-    πp *= 1-v.ηreinfp
-    πm *= 1-v.ηreinfm
+    #(nzp > 0 && nzm > 0) && exit("contradiction")
+    πp *= 1 - ηreinfp
+    πm *= 1 - ηreinfm
 
-    return πp, πm, nzp, nzm
+    return πp, πm #, nzp, nzm
 end
 
-function mag(v::Var)
-    πp, πm, _, _ = πpm(v)
+@inline function mag(v::Var)
+    #πp, πm, _, _ = πpm(v)
+    πp, πm = πpm(v)
     # pup = P(σ_i = 1)
-    p = πp / (πm + πp)
-    m = 2p - 1
-    return m
+    return (πp - πm) / (πm + πp)
 end
 
-mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
+#mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
 
 function solveKSAT(cnfname::AbstractString; kw...)
     cnf = readcnf(cnfname)
