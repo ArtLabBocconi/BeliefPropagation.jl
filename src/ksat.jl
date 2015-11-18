@@ -245,6 +245,7 @@ function update!(v::Var, reinf::Float64 = 0.)
         #vecchio reinforcement
         # v.ηreinfm = reinf * (1 - 2q) / (1-q)
 
+        #nuovo reinforcement
         # q = q^reinf /(q^reinf+(1-q)^reinf)
         # v.ηreinfm = (1 - 2q) / (1-q)
         v.ηreinfm = 1 - (q/(1-q))^reinf
