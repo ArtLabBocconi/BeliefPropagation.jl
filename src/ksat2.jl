@@ -67,7 +67,8 @@ type FactorGraphKSAT <: FactorGraph
     σ::Vector{Int}
     cnf::CNF
     ζ::Vector{MessH}
-    fperm::Vector{Int}
+    Δ::Vector{Float64}
+    fperm::Dict{Int,Vector{Int}}
 
     function FactorGraphKSAT(cnf::CNF)
         @extract cnf M N clauses
@@ -115,8 +116,9 @@ type FactorGraphKSAT <: FactorGraph
 
         σ = ones(Int, N)
         ζ = zeros(MessH, maxK)
-        fperm = collect(1:M)
-        new(N, M, allliterals, fnodes, vnodes, σ, cnf, ζ, fperm)
+        Δ = zeros(1)
+        fperm = Dict{Int,Vector{Int}}([K=>collect(1:length(fv)) for (K,fv) in fnodes])
+        new(N, M, allliterals, fnodes, vnodes, σ, cnf, ζ, Δ, fperm)
     end
 end
 
@@ -172,7 +174,7 @@ function initrand!(g::FactorGraphKSAT)
     return g
 end
 
-function update1(vnodes, vi, η̄, J, ζprod, nzeros)
+@inline function update1(vnodes::Vector{Var}, vi::Int, η̄::MessU, J::Int, ζprod::Float64, nzeros::Int)
     eps = 1e-15
     π1 = vnodes[vi].π1
     πp = π1.p
@@ -191,10 +193,9 @@ function update1(vnodes, vi, η̄, J, ζprod, nzeros)
         nzeros += 1
     end
     return ζ, ζprod, nzeros
-    #ζ[i] = z
 end
 
-function update2(l::Literal, vnodes::Vector{Var}, ζprod, nzeros, ζ)
+@inline function update2(l::Literal, vnodes::Vector{Var}, ζprod, nzeros, ζ, Δ)
     eps = 1e-15
     #l = lit[i]
     if nzeros == 0
@@ -216,18 +217,17 @@ function update2(l::Literal, vnodes::Vector{Var}, ζprod, nzeros, ζ)
         πm *= η̄new / η̄old
     end
     vnodes[vi] = newvar1(v, Pi(πp, πm))
+    Δ[1] = max(Δ[1], abs(η̄new  - η̄old))
     return newη̄(l, η̄new)
-    # Δ = max(Δ, abs(ηi  - old))
 end
 
-@generated function newlit{K}(lit::NTuple{K,Literal}, vnodes::Vector{Var}, ζprod, nzeros, ζ)
-    args = [:(update2(lit[$i], vnodes, ζprod, nzeros, ζ[$i])) for i = 1:K]
+@generated function newlit{K}(lit::NTuple{K,Literal}, vnodes::Vector{Var}, ζprod, nzeros, ζ, Δ)
+    args = [:(update2(lit[$i], vnodes, ζprod, nzeros, ζ[$i], Δ)) for i = 1:K]
     return :(tuple($(args...)))
 end
 
-function update!{K}(f::Fact{K}, vnodes::Vector{Var}, ζ::Vector{MessH})
+function update!{K}(f::Fact{K}, vnodes::Vector{Var}, ζ::Vector{MessH}, Δ::Vector{Float64})
     lit = f[]
-    Δ = 1.
     ζprod = 1.
     #eps = 1e-15
     nzeros = 0
@@ -235,8 +235,8 @@ function update!{K}(f::Fact{K}, vnodes::Vector{Var}, ζ::Vector{MessH})
         l = lit[i]
         ζ[i], ζprod, nzeros = update1(vnodes, l.var, l.η̄, l.J, ζprod, nzeros)
     end
-    f[] = newlit(lit, vnodes, ζprod, nzeros, ζ)
-    return Δ
+    f[] = newlit(lit, vnodes, ζprod, nzeros, ζ, Δ)
+    return
 end
 
 function update(v::Var, reinf::Float64 = 0.)
@@ -272,32 +272,27 @@ function update(v::Var, reinf::Float64 = 0.)
     return Var(Pi(πp, πm), Pi(πp, πm), Pi(η̄reinfp, η̄reinfm))
 end
 
-function oneKiter!{K}(fnodes::Vector{Fact{K}}, vnodes::Vector{Var}, ζ::Vector{MessH})
-    for f in shuffle(fnodes)
-        d = update!(f, vnodes, ζ)
+function oneKiter!{K}(fnodes::Vector{Fact{K}}, vnodes::Vector{Var}, ζ::Vector{MessH}, fperm::Vector{Int}, Δ::Vector{Float64})
+    for fi in shuffle!(fperm)
+        update!(fnodes[fi], vnodes, ζ, Δ)
     end
 end
 
 function oneBPiter!(g::FactorGraph, reinf::Float64=0.)
-    @extract g fnodes vnodes ζ
-    Δ = 1.
+    @extract g fnodes vnodes ζ Δ fperm
+
+    Δ[1] = 0.0
 
     for K in keys(fnodes)
         fv = getfnodes(fnodes, Val{K})
-        oneKiter!(fv, vnodes, ζ)
+        oneKiter!(fv, vnodes, ζ, fperm[K], Δ)
     end
-
-    #shuffle!(fperm)
-    #for a in fperm
-        #d = update!(fnodes[a], vnodes)
-        #Δ = max(Δ, d)
-    #end
 
     for i = 1:length(g.vnodes)
         g.vnodes[i] = update(g.vnodes[i], reinf)
     end
 
-    return Δ
+    return Δ[1]
 end
 
 function update_reinforcement!(reinfpar::ReinfParams)
