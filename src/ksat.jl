@@ -37,7 +37,7 @@ type Var
     ηreinfm::MessU
 end
 
-Var() = Var(VU(),VU(), VRH(), VRH(), 0., 0.)
+Var() = Var(VU(),VU(), VRH(), VRH(), 1., 1.)
 
 abstract FactorGraph
 type FactorGraphKSAT <: FactorGraph
@@ -107,8 +107,7 @@ type ReinfParams
     reinf::Float64
     step::Float64
     wait_count::Int
-    tγ::Float64
-    ReinfParams(reinf=0., step = 0., γ = 0.) = new(reinf, step, 0, tanh(γ))
+    ReinfParams(reinf=0., step = 0.) = new(reinf, step, 0)
 end
 
 deg(f::Fact) = length(f.ηlist)
@@ -124,46 +123,16 @@ function initrand!(g::FactorGraphKSAT)
     for v in g.vnodes
         for k=1:degp(v)
             r = 0.5*rand()
-            v.ηlistp[k] = (1-2r)/(1-r)
+            v.ηlistp[k] = 1 - (1-2r)/(1-r)
         end
         for k=1:degm(v)
             r = 0.5*rand()
-            v.ηlistm[k] = (1-2r)/(1-r)
+            v.ηlistm[k] = 1 - (1-2r)/(1-r)
         end
-        v.ηreinfm = 0
-        v.ηreinfp = 0
+        v.ηreinfm = 1
+        v.ηreinfp = 1
     end
 end
-
-# function decrease_reinforcement!(g::FactorGraphKSAT, reinfp::ReinfParams)
-#     println("reinf: $(reinfp.reinf) -> $(reinfp.reinf /= 2)")
-#     println("reinf_step: $(reinfp.step) -> $(reinfp.step /= 2)")
-#     reinfp.wait_count = 0
-#
-#     for f in g.fnodes
-#         for k=1:deg(f)
-#             if !isfinite(f.πlist[k])
-#                 f.πlist[k] = rand()
-#             end
-#         end
-#     end
-#     for v in g.vnodes
-#         for k=1:degp(v)
-#             if !isfinite(v.ηlistp[k])
-#                 r = 0.5*rand()
-#                 v.ηlistp[k] = (1-2r)/(1-r)
-#             end
-#         end
-#         for k=1:degm(v)
-#             if !isfinite(v.ηlistm[k] )
-#                 r = 0.5*rand()
-#                 v.ηlistm[k] = (1-2r)/(1-r)
-#             end
-#         end
-#         v.ηreinfm = 0
-#         v.ηreinfp = 0
-#     end
-# end
 
 function update!(f::Fact)
     @extract f ηlist πlist
@@ -188,93 +157,63 @@ function update!(f::Fact)
             ηi = 0.
         end
         # old = ηlist[i][]
-        ηlist[i][] = ηi
+        ηlist[i][] = 1 - ηi
         # Δ = max(Δ, abs(ηi  - old))
     end
     Δ
 end
 
-function update!(v::Var, reinf::Float64 = 0., tγ::Float64 = 0.)
+function update!(v::Var, reinf::Float64 = 0.)
     #TODO check del denominatore=0
     @extract v ηlistp ηlistm πlistp πlistm
     Δ = 1.
     eps = 1e-15
 
     ### compute total fields
-    πp, πm, nzerosp, nzerosm = πpm(v)
+    πp, πm = πpm(v)
 
     ### compute cavity fields
     for i=1:degp(v)
-        # if nzerosp == 0
-            πpi = πp / (1-ηlistp[i])
-        # elseif (nzerosp == 1) && (1-ηlistp[i] < eps)
-        #     πpi = πp
-        # else
-        #     πpi = 0.
-        # end
-        # old = πlistp[i][]
+        πpi = πp / ηlistp[i]
         πlistp[i][] = πpi  / (πpi + πm)
-        # Δ = max(Δ, abs(πlistp[i][] - old))
     end
 
     for i=1:degm(v)
-        # if nzerosm == 0
-            πmi = πm / (1-ηlistm[i])
-        # elseif (nzerosm == 1) && (1-ηlistm[i] < eps)
-            # πmi = πm
-        # else
-            # πmi = 0.
-        # end
-        # old = πlistm[i][]
+        πmi = πm / ηlistm[i]
         πlistm[i][] = πmi / (πmi + πp)
-        # Δ = max(Δ, abs(πlistm[i][]  - old))
     end
     ###############
 
-    # #### update reinforcement ######
+    #### update reinforcement ######
+    if πp < πm
+        v.ηreinfp = (πp/πm)^reinf
+        v.ηreinfm = 1
+    else
+        v.ηreinfm = (πm/πp)^reinf
+        v.ηreinfp = 1
+    end
+    #########################
+
+    # #### update pseudo-reinforcement ######
+    # πpR = πp / v.ηreinfp
+    # πmR = πm / v.ηreinfm
+    # mγ = (πpR-πmR) / (πpR+πmR) * tγ
+    # pp = (1+mγ)^reinf
+    # mm = (1-mγ)^reinf
+    # mR = tγ * (pp-mm) / (pp+mm)
     # if πp < πm
-    #     p = πp / (πp+πm)
-    #     #vecchio reinforcement
-    #     # v.ηreinfp = reinf * (1 - 2p) / (1-p)
-    #
-    #     # p = p^reinf /(p^reinf+(1-p)^reinf)
-    #     v.ηreinfp = 1 - (p/(1-p))^reinf
-    #
-    #     v.ηreinfm = 0
+    #     v.ηreinfp = 1 - 2mR / (mR - 1)
+    #     v.ηreinfm = 1
     # else
-    #     q = πm / (πp+πm)
-    #     #vecchio reinforcement
-    #     # v.ηreinfm = reinf * (1 - 2q) / (1-q)
-    #
-    #     #nuovo reinforcement
-    #     # q = q^reinf /(q^reinf+(1-q)^reinf)
-    #     # v.ηreinfm = (1 - 2q) / (1-q)
-    #     v.ηreinfm = 1 - (q/(1-q))^reinf
-    #
-    #     v.ηreinfp = 0
+    #     v.ηreinfm = 1 - 2mR / (1 + mR)
+    #     v.ηreinfp = 1
     # end
     # #########################
 
-
-    #### update pseudo-reinforcement ######
-    πpR = πp / (1-v.ηreinfp)
-    πmR = πm / (1-v.ηreinfm)
-    mγ = (πpR-πmR) / (πpR+πmR) * tγ
-    pp = (1+mγ)^reinf
-    mm = (1-mγ)^reinf
-    mR = tγ * (pp-mm) / (pp+mm)
-    if πp < πm
-        v.ηreinfp = 2mR / (mR - 1)
-        v.ηreinfm = 0
-    else
-        v.ηreinfm = 2mR / (1 + mR)
-        v.ηreinfp = 0
-    end
-    #########################
     Δ
 end
 
-function oneBPiter!(g::FactorGraph, reinf::Float64=0., tγ::Float64=0.)
+function oneBPiter!(g::FactorGraph, reinf::Float64=0.)
     Δ = 0.
 
     for a=randperm(g.M)
@@ -283,7 +222,7 @@ function oneBPiter!(g::FactorGraph, reinf::Float64=0., tγ::Float64=0.)
     end
 
     for i=randperm(g.N)
-        d = update!(g.vnodes[i], reinf, tγ)
+        d = update!(g.vnodes[i], reinf)
         Δ = max(Δ, d)
     end
 
@@ -306,7 +245,7 @@ end
 function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5, reinfpar::ReinfParams=ReinfParams())
     for it=1:maxiters
         write("it=$it ... ")
-        Δ = oneBPiter!(g, reinfpar.reinf, reinfpar.tγ)
+        Δ = oneBPiter!(g, reinfpar.reinf)
         σ = getconfig(g)
         E = energy(g.cnf, σ)
         @printf("reinf=%.3f E=%d  Δ=%f \n",reinfpar.reinf, E, Δ)
@@ -338,40 +277,24 @@ end
 
 function πpm(v::Var)
     @extract v ηlistp ηlistm
-    eps = 1e-15
-    nzp = 0
-    nzm = 0
     πp = 1.
-
     for η in ηlistp
-    # if 1 - ηlistp[j] > eps
-        πp *= 1 - η
-    # else
-    #     # println("there")
-    #     nzp += 1
-    # end
+        πp *= η
     end
     πm = 1.
     for η in ηlistm
-    # if 1 - ηlistm[j] > eps
-        πm *= 1 - η
-    # else
-    #     nzm += 1
-    # end
+        πm *= η
     end
-    (nzp > 0 && nzm > 0) && exit("contradiction")
-    πp *= 1-v.ηreinfp
-    πm *= 1-v.ηreinfm
+    # (nzp > 0 && nzm > 0) && exit("contradiction")
+    πp *= v.ηreinfp
+    πm *= v.ηreinfm
 
-    return πp, πm, nzp, nzm
+    return πp, πm
 end
 
 function mag(v::Var)
-    πp, πm, _, _ = πpm(v)
-    # pup = P(σ_i = 1)
-    p = πp / (πm + πp)
-    m = 2p - 1
-    return m
+    πp, πm = πpm(v)
+    return (πp - πm) / (πm + πp)
 end
 
 mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
@@ -390,12 +313,12 @@ function solveKSAT(; N::Int=1000, α::Float64=3., k::Int = 4, seed_cnf::Int=-1, 
 end
 
 function solveKSAT(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-6,
-                reinf::Float64 = 0., reinf_step::Float64= 0., γ::Float64 = 0.,
+                reinf::Float64 = 0., reinf_step::Float64= 0.01,
                 seed::Int = -1)
     if seed > 0
         srand(seed)
     end
-    reinfpar = ReinfParams(reinf, reinf_step, γ)
+    reinfpar = ReinfParams(reinf, reinf_step)
     g = FactorGraphKSAT(cnf)
     initrand!(g)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar)
