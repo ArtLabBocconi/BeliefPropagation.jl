@@ -120,17 +120,17 @@ degm(v::Var) = length(v.ηlistm)
 function initrand!(g::FactorGraphKSAT)
     for f in g.fnodes
         for k=1:deg(f)
-            f.πlist[k] = 0.5#*rand()
+            f.πlist[k] = rand()
         end
     end
     for v in g.vnodes
         for k=1:degp(v)
             r = 0.5*rand()
-            v.ηlistp[k] = 1.#1 - (1-2r)/(1-r)
+            v.ηlistp[k] = 1 - (1-2r)/(1-r)
         end
         for k=1:degm(v)
             r = 0.5*rand()
-            v.ηlistm[k] = 1.#1 - (1-2r)/(1-r)
+            v.ηlistm[k] = 1 - (1-2r)/(1-r)
         end
         v.ηreinfm = 1
         v.ηreinfp = 1
@@ -139,7 +139,6 @@ end
 
 function update!(f::Fact)
     @extract f ηlist πlist
-    Δ = 1.
     η = 1.
     eps = 1e-15
     nzeros = 0
@@ -159,32 +158,33 @@ function update!(f::Fact)
         else
             ηi = 0.
         end
-        old = ηlist[i][]
         ηlist[i][] = 1 - ηi
-        Δ = max(Δ, abs(1-ηi- old))
     end
-    Δ
 end
 
 function update!(v::Var, r::Float64 = 0., tγ::Float64 = 0.)
     #TODO check del denominatore=0
     @extract v ηlistp ηlistm πlistp πlistm
-    Δ = 1.
-    eps = 1e-15
-
+    # eps = 1e-15
+    Δ = 0.
     ### compute total fields
     πp, πm = πpm(v)
 
     ### compute cavity fields
     for i=1:degp(v)
         πpi = πp / ηlistp[i]
-        πlistp[i][] = πpi  / (πpi + πm)
+        πpi /= (πpi + πm)
+        old = πlistp[i][]
+        πlistp[i][] = πpi
+        Δ = max(Δ, abs(πpi- old))
     end
 
     for i=1:degm(v)
         πmi = πm / ηlistm[i]
+        πmi /= (πp + πmi)
         old = πlistm[i][]
-        πlistm[i][] = πmi / (πmi + πp)
+        πlistm[i][] = πmi
+        Δ = max(Δ, abs(πmi- old))
     end
     ###############
 
@@ -213,7 +213,6 @@ function update!(v::Var, r::Float64 = 0., tγ::Float64 = 0.)
             v.ηreinfp = 1
         end
     end
-
     Δ
 end
 
@@ -221,8 +220,7 @@ function oneBPiter!(g::FactorGraph, r::Float64=0., tγ::Float64=0.)
     Δ = 0.
 
     for a=randperm(g.M)
-        d = update!(g.fnodes[a])
-        Δ = max(Δ, d)
+        update!(g.fnodes[a])
     end
 
     for i=randperm(g.N)
@@ -247,7 +245,7 @@ function update_reinforcement!(reinfpar::ReinfParams)
     end
 end
 
-getconfig(mags::Vector) = Int[1-2signbit(m) for m in mags]
+getσ(mags::Vector) = Int[1-2signbit(m) for m in mags]
 
 function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5
         , reinfpar::ReinfParams=ReinfParams(), alt_when_solved::Bool=false)
@@ -255,12 +253,10 @@ function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5
     for it=1:maxiters
         write("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.r, reinfpar.tγ)
-        σ = getconfig(mags(g))
-        σcent = getconfig(mags_ext(g))
+        σ = getσ(mags(g))
         E = energy(g.cnf, σ)
-        Ecent = energy(g.cnf, σcent)
         # println(mags(g)[1:10])
-        @printf("r=%.3f γ=%.3f \t  E=%d  Ecent=%d  \tΔ=%f \n",reinfpar.r, reinfpar.γ, E, Ecent, Δ)
+        @printf("r=%.3f γ=%.3f \t  E=%d   \tΔ=%f \n",reinfpar.r, reinfpar.γ, E, Δ)
         update_reinforcement!(reinfpar)
         if alt_when_solved && E == 0
             println("Found Solution!")
@@ -345,5 +341,5 @@ function solveKSAT(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-6,
     g = FactorGraphKSAT(cnf)
     initrand!(g)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, alt_when_solved=alt_when_solved)
-    return getconfig(mags(g))
+    return getσ(mags(g))
 end
