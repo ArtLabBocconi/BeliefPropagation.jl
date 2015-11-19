@@ -52,15 +52,16 @@ end
 
 newη̄(l::Literal, η̄) = Literal(η̄, l.var, l.J)
 
-type Fact{K}
-    lit::NTuple{K,Literal}
-end
+typealias Fact{K} Ptr{NTuple{K,Literal}}
+Base.getindex{K}(f::Fact{K}) = unsafe_load(f)
+Base.setindex!{K}(f::Fact{K}, lit::NTuple{K,Literal}) = unsafe_store!(f, lit)
 getK{K}(::Fact{K}) = K
 
 abstract FactorGraph
 type FactorGraphKSAT <: FactorGraph
     N::Int
     M::Int
+    allliterals::Vector{Literal}
     fnodes::Dict{Int,Vector{Fact}}
     vnodes::Vector{Var}
     σ::Vector{Int}
@@ -72,29 +73,50 @@ type FactorGraphKSAT <: FactorGraph
         @extract cnf M N clauses
         println("# read CNF formula")
         println("# N=$N M=$M α=$(M/N)")
-        #fnodes = [Fact() for i=1:M]
         vnodes = [Var() for i=1:N]
 
         Ks = map(length, clauses)
+        allKs = sort!(union(Ks))
 
+        Kdict = Dict{Int,Vector{Int}}([K=>find(Ks .== K) for K in allKs])
+
+        allliterals = Array(Literal, sum(Ks))
         fnodes = Dict{Int,Vector{Fact}}()
-        #sizehint!(fnodes, M)
-        for (a,clause) in enumerate(clauses)
-            K = Ks[a]
-            haskey(fnodes, K) || (fnodes[K] = Fact{K}[])
-            push!(fnodes[K],
-                Fact{K}(ntuple(i->begin
+
+        litind = 1
+        for K in allKs
+            fv = Array(Fact{K}, length(Kdict[K]))
+            fi = 1
+            for a in Kdict[K]
+                clause = clauses[a]
+                fv[fi] = convert(Ptr{Fact{K}}, pointer(allliterals, litind))
+                for i = 1:K
                     id = clause[i]
                     @assert id ≠ 0
-                    Literal(MessU(), abs(id), sign(id))
-                end, K)))
+                    allliterals[litind] = Literal(MessU(), abs(id), sign(id))
+                    litind += 1
+                end
+                fi += 1
+            end
+            fnodes[K] = fv
         end
+        @assert litind == length(allliterals) + 1
+
+        #for (a,clause) in enumerate(clauses)
+            #K = Ks[a]
+            #push!(fnodes[K],
+                #Fact{K}(ntuple(i->begin
+                    #id = clause[i]
+                    #@assert id ≠ 0
+                    #Literal(MessU(), abs(id), sign(id))
+                #end, K)))
+        #end
         maxK = maximum(keys(fnodes))
 
         σ = ones(Int, N)
         ζ = zeros(MessH, maxK)
         fperm = collect(1:M)
-        new(N, M, fnodes, vnodes, σ, cnf, ζ, fperm)
+        new(N, M, allliterals, fnodes, vnodes, σ, cnf, ζ, fperm)
     end
 end
 
@@ -110,17 +132,11 @@ type ReinfParams
     ReinfParams(reinf=0., step = 0.) = new(reinf, step, 0)
 end
 
-function initrand!(g::FactorGraphKSAT)
-    for i = 1:length(g.vnodes)
-        g.vnodes[i] = Var()
-    end
-
-    πp = ones(g.N)
-    πm = ones(g.N)
-
-    for (K,fv) in g.fnodes, f in fv
+function initrand!{K}(fv::Vector{Fact{K}}, πp, πm)
+    for f in fv
+        lit = f[]
         newlit = ntuple(k->begin
-                l = f.lit[k]
+                l = lit[k]
                 r = 0.5 * rand()
                 η̄ = r / (1 - r)
                 vi = l.var
@@ -130,8 +146,23 @@ function initrand!(g::FactorGraphKSAT)
                     πm[vi] *= η̄
                 end
                 return newη̄(l, η̄)
-            end, getK(f))
-        f.lit = newlit
+            end, K)
+        f[] = newlit
+    end
+end
+
+function initrand!(g::FactorGraphKSAT)
+    for i = 1:length(g.vnodes)
+        g.vnodes[i] = Var()
+    end
+
+    πp = ones(g.N)
+    πm = ones(g.N)
+
+    #for (K,fv) in g.fnodes, f in fv
+    for K in keys(g.fnodes)
+        fv = getfnodes(g.fnodes, Val{K})
+        initrand!(fv, πp, πm)
     end
 
     for (i,v) in enumerate(g.vnodes)
@@ -195,7 +226,7 @@ end
 end
 
 function update!{K}(f::Fact{K}, vnodes::Vector{Var}, ζ::Vector{MessH})
-    @extract f lit
+    lit = f[]
     Δ = 1.
     ζprod = 1.
     #eps = 1e-15
@@ -204,7 +235,7 @@ function update!{K}(f::Fact{K}, vnodes::Vector{Var}, ζ::Vector{MessH})
         l = lit[i]
         ζ[i], ζprod, nzeros = update1(vnodes, l.var, l.η̄, l.J, ζprod, nzeros)
     end
-    f.lit = newlit(lit, vnodes, ζprod, nzeros, ζ)
+    f[] = newlit(lit, vnodes, ζprod, nzeros, ζ)
     return Δ
 end
 
