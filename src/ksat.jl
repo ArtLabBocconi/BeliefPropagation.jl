@@ -146,7 +146,6 @@ function update!(f::Fact)
         if πlist[i] > eps
             η *= πlist[i]
         else
-            # println("here")
             nzeros+=1
         end
     end
@@ -165,7 +164,6 @@ end
 function update!(v::Var, r::Float64 = 0., tγ::Float64 = 0.)
     #TODO check del denominatore=0
     @extract v ηlistp ηlistm πlistp πlistm
-    # eps = 1e-15
     Δ = 0.
     ### compute total fields
     πp, πm = πpm(v)
@@ -206,10 +204,10 @@ function update!(v::Var, r::Float64 = 0., tγ::Float64 = 0.)
         mm = (1-mγ)^r
         mR = tγ * (pp-mm) / (pp+mm)
         if πp < πm
-            v.ηreinfp = 1 - 2mR / (mR - 1)
+            v.ηreinfp = (1 + mR) / (1 - mR)
             v.ηreinfm = 1
         else
-            v.ηreinfm = 1 - 2mR / (1 + mR)
+            v.ηreinfm = (1 - mR) / (1 + mR)
             v.ηreinfp = 1
         end
     end
@@ -255,8 +253,11 @@ function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5
         Δ = oneBPiter!(g, reinfpar.r, reinfpar.tγ)
         σ = getσ(mags(g))
         E = energy(g.cnf, σ)
-        # println(mags(g)[1:10])
         @printf("r=%.3f γ=%.3f \t  E=%d   \tΔ=%f \n",reinfpar.r, reinfpar.γ, E, Δ)
+        # σ_noreinf = getσ(mags_noreinf(g))
+        # E_noreinf = energy(g.cnf, σ_noreinf)
+        # @printf("r=%.3f γ=%.3f \t  E=%d   \tE_noreinf=%d   Δ=%f \n",reinfpar.r, reinfpar.γ, E, E_noreinf, Δ)
+        # println(mags(g)[1:10])
         update_reinforcement!(reinfpar)
         if alt_when_solved && E == 0
             println("Found Solution!")
@@ -276,6 +277,7 @@ function energy(cnf::CNF, σ)
         for i in c
             if sign(i) == σ[abs(i)]
                 issatisfied = true
+                break
             end
         end
         E += issatisfied ? 0 : 1
@@ -302,18 +304,22 @@ end
 
 function mag(v::Var)
     πp, πm = πpm(v)
-    return (πp - πm) / (πm + πp)
+    m = (πp - πm) / (πm + πp)
+    @assert isfinite(m)
+    return m
 end
 
-function mag_ext(v::Var)
+function mag_noreinf(v::Var)
     πp, πm = πpm(v)
     πp /= v.ηreinfp
     πm /= v.ηreinfm
-    return (πp - πm) / (πm + πp)
+    m = (πp - πm) / (πm + πp)
+    # @assert isfinite(m)
+    return m
 end
 
 mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
-mags_ext(g::FactorGraph) = Float64[mag_ext(v) for v in g.vnodes]
+mags_noreinf(g::FactorGraph) = Float64[mag_noreinf(v) for v in g.vnodes]
 
 function solveKSAT(cnfname::AbstractString; kw...)
     cnf = readcnf(cnfname)
