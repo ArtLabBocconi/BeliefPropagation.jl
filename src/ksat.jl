@@ -27,6 +27,7 @@ end
 Fact() = Fact(VH(), VRU())
 
 type Var
+    pinned::Int
     ηlistp::Vector{MessU}
     ηlistm::Vector{MessU}
     πlistp::VRH
@@ -37,7 +38,7 @@ type Var
     ηreinfm::MessU
 end
 
-Var() = Var(VU(),VU(), VRH(), VRH(), 1., 1.)
+Var() = Var(0, VU(),VU(), VRH(), VRH(), 1., 1.)
 
 abstract FactorGraph
 type FactorGraphKSAT <: FactorGraph
@@ -161,8 +162,71 @@ function update!(f::Fact)
     end
 end
 
+setfree!(v::Var) = v.pinned = 0
+
+function setpinned!(v::Var, σ::Int)
+    #TODO check del denominatore=0
+    @extract v  πlistp πlistm
+    v.pinned = σ
+    ### compute cavity fields
+    for i=1:degp(v)
+        πlistp[i][] = σ > 0 ? 1. : 0.
+    end
+
+    for i=1:degm(v)
+        πlistm[i][] = σ > 0 ? 0. : 1.
+    end
+end
+
+ispinned(v::Var) = v.pinned != 0
+numpinned(g::FactorGraphKSAT) = sum(ispinned, g.vnodes)
+
+# r = fraction of N to assign
+function pin_most_biased!(g::FactorGraphKSAT, r::Float64 = 0.02)
+    mlist = Vector{Tuple{Int,Float64}}()
+    npin = numpinned(g)
+    sizehint!(mlist, g.N - npin)
+    for (i,v) in enumerate(g.vnodes)
+        if !ispinned(v)
+            push!(mlist, (i, mag(v)))
+        end
+    end
+
+    ntopin = min(ceil(Int, r*g.N), length(mlist))
+    println("# Pinning $ntopin Variables")
+    sort!(mlist, lt = (x,y)->abs(x[2]) > abs(y[2]))
+    for k=1:ntopin
+        i, m = mlist[k]
+        setpinned!(g.vnodes[i], 1-2signbit(m))
+    end
+end
+
+# r = fraction of N to free
+function free_most_frustated!(g::FactorGraphKSAT, r::Float64 = 0.01)
+    mlist = Vector{Tuple{Int,Float64}}()
+    npin = numpinned(g)
+    sizehint!(mlist, npin)
+    for (i,v) in enumerate(g.vnodes)
+        if ispinned(v)
+            σ = v.pinned
+            v.pinned = 0. # == setfree!(v)
+            push!(mlist, (i, σ*mag(v)))
+            v.pinned = σ
+        end
+    end
+
+    ntofree = min(ceil(Int, r*g.N), length(mlist))
+    println("# Freeing $ntofree Variables")
+    sort!(mlist, lt = (x,y)->x[2] < y[2])
+    for k=1:ntofree
+        i, m = mlist[k]
+        setfree!(g.vnodes[i])
+    end
+end
+
 function update!(v::Var, r::Float64 = 0., tγ::Float64 = 0.)
     #TODO check del denominatore=0
+    ispinned(v) && return 0.
     @extract v ηlistp ηlistm πlistp πlistm
     Δ = 0.
     ### compute total fields
@@ -214,7 +278,7 @@ function update!(v::Var, r::Float64 = 0., tγ::Float64 = 0.)
     Δ
 end
 
-function oneBPiter!(g::FactorGraph, r::Float64=0., tγ::Float64=0.)
+function oneBPiter!(g::FactorGraphKSAT, r::Float64=0., tγ::Float64=0.)
     Δ = 0.
 
     for a=randperm(g.M)
@@ -251,9 +315,9 @@ function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5
     for it=1:maxiters
         write("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.r, reinfpar.tγ)
-        σ = getσ(mags(g))
-        E = energy(g.cnf, σ)
-        @printf("r=%.3f γ=%.3f \t  E=%d   \tΔ=%f \n",reinfpar.r, reinfpar.γ, E, Δ)
+        E = energy(g)
+        fp = numpinned(g) / g.N
+        @printf("r=%.3f γ=%.3f ρ_pin=%f\t  E=%d   \tΔ=%f \n",reinfpar.r,  reinfpar.γ, fp, E, Δ)
         # σ_noreinf = getσ(mags_noreinf(g))
         # E_noreinf = energy(g.cnf, σ_noreinf)
         # @printf("r=%.3f γ=%.3f \t  E=%d   \tE_noreinf=%d   Δ=%f \n",reinfpar.r, reinfpar.γ, E, E_noreinf, Δ)
@@ -285,6 +349,8 @@ function energy(cnf::CNF, σ)
     E
 end
 
+energy(g::FactorGraphKSAT) = energy(g.cnf, getσ(mags(g)))
+
 function πpm(v::Var)
     @extract v ηlistp ηlistm
     πp = 1.
@@ -303,6 +369,7 @@ function πpm(v::Var)
 end
 
 function mag(v::Var)
+    ispinned(v) && return float(v.pinned)
     πp, πm = πpm(v)
     m = (πp - πm) / (πm + πp)
     @assert isfinite(m)
@@ -310,6 +377,7 @@ function mag(v::Var)
 end
 
 function mag_noreinf(v::Var)
+    ispinned(v) && return float(v.pinned)
     πp, πm = πpm(v)
     πp /= v.ηreinfp
     πm /= v.ηreinfm
@@ -319,7 +387,7 @@ function mag_noreinf(v::Var)
 end
 
 mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
-mags_noreinf(g::FactorGraph) = Float64[mag_noreinf(v) for v in g.vnodes]
+mags_noreinf(g::FactorGraphKSAT) = Float64[mag_noreinf(v) for v in g.vnodes]
 
 function solveKSAT(cnfname::AbstractString; kw...)
     cnf = readcnf(cnfname)
@@ -334,7 +402,8 @@ function solveKSAT(; N::Int=1000, α::Float64=3., k::Int = 4, seed_cnf::Int=-1, 
     solveKSAT(cnf; kw...)
 end
 
-function solveKSAT(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-6,
+function solveKSAT(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
+                method = :reinforcement, #[:reinforcement, :decimation]
                 r::Float64 = 0., r_step::Float64= 0.001,
                 γ::Float64 = 0., γ_step::Float64=0.,
                 alt_when_solved::Bool = true,
@@ -342,10 +411,22 @@ function solveKSAT(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-6,
     if seed > 0
         srand(seed)
     end
-    reinfpar = ReinfParams(r, r_step, γ, γ_step)
-
     g = FactorGraphKSAT(cnf)
     initrand!(g)
-    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, alt_when_solved=alt_when_solved)
+
+    if method == :reinforcement
+        reinfpar = ReinfParams(r, r_step, γ, γ_step)
+        converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, alt_when_solved=alt_when_solved)
+    elseif method == :decimation
+        converge!(g, maxiters=maxiters, ϵ=ϵ, alt_when_solved=alt_when_solved)
+        while true
+            pin_most_biased!(g, r) # r=frac fixed , γ=frac freed
+            free_most_frustated!(g, γ) # r=frac fixed , γ=frac freed
+            converge!(g, maxiters=maxiters, ϵ=ϵ, alt_when_solved=alt_when_solved)
+            E = energy(g)
+            numdec = numpinned(g)
+            (E == 0 || numdec == g.N) && break
+        end
+    end
     return getσ(mags(g))
 end
