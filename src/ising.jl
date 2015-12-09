@@ -1,5 +1,3 @@
-using MacroUtils
-using LightGraphs
 typealias MessU Float64  # ̂ν(a→i) = P(σ_i != J_ai)
 MessU()= MessU(0.)
 
@@ -36,7 +34,7 @@ type FactorGraphIsing <: FactorGraph
 end
 
 function FactorGraphIsingRRG(N::Int, k::Int, seed_graph::Int = -1)
-    g = random_regular_graph(N, k, seed_graph)
+    g = random_regular_graph(N, k, seed=seed_graph)
     adjlist = g.fadjlist
     assert(length(adjlist) == N)
     vnodes = [VarIsing() for i=1:N]
@@ -95,37 +93,6 @@ function initrandMess!(g::FactorGraphIsing; m::Float64=1., σ::Float64=1.)
     end
 end
 
-#
-# # function decrease_reinforcement!(g::FactorGraphKSAT, reinfp::ReinfParams)
-# #     println("reinf: $(reinfp.reinf) -> $(reinfp.reinf /= 2)")
-# #     println("reinf_step: $(reinfp.step) -> $(reinfp.step /= 2)")
-# #     reinfp.wait_count = 0
-# #
-# #     for f in g.fnodes
-# #         for k=1:deg(f)
-# #             if !isfinite(f.πlist[k])
-# #                 f.πlist[k] = rand()
-# #             end
-# #         end
-# #     end
-# #     for v in g.vnodes
-# #         for k=1:degp(v)
-# #             if !isfinite(v.ηlistp[k])
-# #                 r = 0.5*rand()
-# #                 v.ηlistp[k] = (1-2r)/(1-r)
-# #             end
-# #         end
-# #         for k=1:degm(v)
-# #             if !isfinite(v.ηlistm[k] )
-# #                 r = 0.5*rand()
-# #                 v.ηlistm[k] = (1-2r)/(1-r)
-# #             end
-# #         end
-# #         v.ηreinfm = 0
-# #         v.ηreinfp = 0
-# #     end
-# # end
-#
 function update!(v::VarIsing)
     @extract v uin uout tJ
     Δ = 0.
@@ -166,20 +133,6 @@ function converge!(g::FactorGraphIsing; maxiters::Int = 1000, ϵ::Float64=1e-6, 
     end
 end
 
-# function energy(cnf::CNF, σ)
-#     E = 0
-#     for c in cnf.clauses
-#         issatisfied = false
-#         for i in c
-#             if sign(i) == σ[abs(i)]
-#                 issatisfied = true
-#             end
-#         end
-#         E += issatisfied ? 0 : 1
-#     end
-#     E
-# end
-
 htot(v::VarIsing) = sum(v.uin) + v.H
 mag(v::VarIsing) = tanh(htot(v))
 mags(g::FactorGraphIsing) = Float64[mag(v) for v in g.vnodes]
@@ -215,26 +168,6 @@ function corr_disc_nn(g::FactorGraphIsing)
     end
     corrs
 end
-
-
-
-# function fixedpointmag(β, k)
-#     u = 10.
-#     tJ = tanh(β)
-#     for i=1:200
-#         u = atanh(tJ*(tanh((k-1)*u)))
-#     end
-#     tanh(k*u)
-# end
-#
-# function crit_ferro(k)
-#     res = Any[]
-#     for β=0.3:0.002:0.4
-#         m = fixedpointmag(β, k)
-#         push!(res, (β,m))
-#     end
-#     return res
-# end
 
 function setH!(g::FactorGraphIsing, H::Vector)
     assert(g.N == length(H))
