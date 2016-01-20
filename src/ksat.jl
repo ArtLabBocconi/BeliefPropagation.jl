@@ -2,19 +2,13 @@ using MacroUtils
 include("cnf.jl")
 typealias MessU Float64  # ̂ν(a→i) = P(σ_i != J_ai)
 typealias MessH Float64 #  ν(i→a) = P(σ_i != J_ai)
-MessU()= MessU(0.)
+
+getref(v::Vector, i::Integer) = pointer(v, i)
+Mess() = Mess(0.)
 
 typealias PU Ptr{MessU}
 typealias PH Ptr{MessH}
-getref(v::Vector, i::Integer) = pointer(v, i)
 
-# typealias PU Ref{MessU}
-# typealias PH Ref{MessH}
-# getref(v::Vector, i::Integer) = Ref(v, i)
-
-
-Base.getindex(p::Ptr) = unsafe_load(p)
-Base.setindex!{T}(p::Ptr{T}, x::T) = unsafe_store!(p, x)
 typealias VU Vector{MessU}
 typealias VH Vector{MessH}
 typealias VRU Vector{PU}
@@ -389,28 +383,24 @@ end
 mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
 mags_noreinf(g::FactorGraphKSAT) = Float64[mag_noreinf(v) for v in g.vnodes]
 
-function solveKSAT(cnfname::AbstractString; kw...)
+function solve(cnfname::AbstractString; kw...)
     cnf = readcnf(cnfname)
-    solveKSAT(cnf; kw...)
+    solve(cnf; kw...)
 end
 
-function solveKSAT(; N::Int=1000, α::Float64=3., k::Int = 4, seed_cnf::Int=-1, kw...)
-    if seed_cnf > 0
-        srand(seed_cnf)
-    end
+function solve(; N::Int=1000, α::Float64=3., k::Int = 4, seed_cnf::Int=-1, kw...)
+    seed_cnf > 0 && srand(seed_cnf)
     cnf = CNF(N, k, α)
-    solveKSAT(cnf; kw...)
+    solve(cnf; kw...)
 end
 
-function solveKSAT(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
+function solve(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
                 method = :reinforcement, #[:reinforcement, :decimation]
                 r::Float64 = 0., r_step::Float64= 0.001,
                 γ::Float64 = 0., γ_step::Float64=0.,
                 alt_when_solved::Bool = true,
                 seed::Int = -1)
-    if seed > 0
-        srand(seed)
-    end
+    seed > 0 && srand(seed)
     g = FactorGraphKSAT(cnf)
     initrand!(g)
 

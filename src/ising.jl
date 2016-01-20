@@ -1,19 +1,7 @@
-typealias MessU Float64  # ̂ν(a→i) = P(σ_i != J_ai)
-MessU()= MessU(0.)
+using MacroUtils
 
+typealias MessU Float64  
 typealias PU Ptr{MessU}
-getref(v::Vector, i::Integer) = pointer(v, i)
-
-# typealias PU Ref{MessU}
-# typealias PH Ref{MessH}
-# getref(v::Vector, i::Integer) = Ref(v, i)
-
-import Base.show
-Base.getindex(p::Ptr) = unsafe_load(p)
-Base.setindex!{T}(p::Ptr{T}, x::T) = unsafe_store!(p, x)
-Base.show(io::IO, p::Ptr) = show(io, p[])
-Base.show(p::Ptr) = show(p[])
-
 typealias VU Vector{MessU}
 typealias VPU Vector{PU}
 
@@ -26,6 +14,7 @@ end
 
 VarIsing() = VarIsing(VU(),VPU(), Vector{Float64}(), 0.)
 
+abstract FactorGraph
 type FactorGraphIsing <: FactorGraph
     N::Int
     vnodes::Vector{VarIsing}
