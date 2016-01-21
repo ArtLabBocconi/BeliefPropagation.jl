@@ -1,7 +1,7 @@
 module BeliefPropagation
 using LightGraphs
 import Base.show
-export KSAT, Ising, Perceptron
+export KSAT, Ising, Perceptron, PerceptronTAP
 
 Base.getindex(p::Ptr) = unsafe_load(p)
 Base.setindex!{T}(p::Ptr{T}, x::T) = unsafe_store!(p, x)
@@ -21,6 +21,10 @@ end
 
 module Perceptron
     include("perceptron.jl")
+end
+
+module PerceptronTAP
+    include("tap_perceptron.jl")
 end
 
 

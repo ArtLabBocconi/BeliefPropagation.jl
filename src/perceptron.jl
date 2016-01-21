@@ -103,7 +103,7 @@ end
 function update!(f::Fact)
     @extract f m m̂ σ ξ
     M = 0.
-    C = deg(f)
+    C = float(deg(f))
     for i=1:deg(f)
         M += ξ[i]*m[i]
         C -= m[i]^2

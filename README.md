@@ -30,7 +30,13 @@ After each convergence of the BP algorithm the `r*N` most biased variables are f
 BP on pairwise Ising. Preliminary work
 
 ## Perceptron
+### BP + Reinforcement
 BP + reinforcement to solve binary perceptron.
 ```julia
-W = Perceptron.solve(N=1001,α=0.6, seed_ξ=19, γ=0.6, γ_step=0.6, maxiters=1000);
+W = Perceptron.solve(N=1001,α=0.6, seed_ξ=19, γ=0.6, γ_step=0.001, maxiters=1000);
+```
+### TAP + Reinforcement
+TAP + reinforcement to solve binary perceptron.
+```julia
+W = PerceptronTAP.solve(N=1001,α=0.7, γ=0.4, γ_step=0.001, maxiters=1000);
 ```
