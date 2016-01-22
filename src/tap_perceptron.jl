@@ -1,5 +1,5 @@
 using MacroUtils
-
+using FastGaussQuadrature
 
 G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
@@ -96,8 +96,9 @@ end
 
 getW(mags::Vector) = Int[1-2signbit(m) for m in mags]
 
-function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5, alt_when_solved::Bool=false
-                                 , reinfpar::ReinfParams=ReinfParams())
+function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
+                                , alt_when_solved::Bool=false, alt_when_converged = false
+                                , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
         write("it=$it ... ")
@@ -109,7 +110,7 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5, a
             println("Found Solution!")
             break
         end
-        if Δ < ϵ
+        if alt_when_converged && Δ < ϵ
             println("Converged!")
             break
         end

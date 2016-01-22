@@ -33,10 +33,14 @@ BP on pairwise Ising. Preliminary work
 ### BP + Reinforcement
 BP + reinforcement to solve binary perceptron.
 ```julia
-W = Perceptron.solve(N=1001,α=0.6, seed_ξ=19, γ=0.6, γ_step=0.001, maxiters=1000);
+W = Perceptron.solve(N=1001,α=0.6, seed_ξ=19, r=0.6, r_step=0.001, maxiters=1000);
 ```
 ### TAP + Reinforcement
 TAP + reinforcement to solve binary perceptron.
 ```julia
-W = PerceptronTAP.solve(N=1001,α=0.7, γ=0.4, γ_step=0.001, maxiters=1000);
+W = PerceptronTAP.solve(N=1001,α=0.7, r=0.4, r_step=0.001, maxiters=1000);
 ```
+### EdTAP + Reinforcement
+Work In Progress : Entopy driven TAP for binary perceptron.
+```julia
+W = PerceptronTAP.solve(N=1001,α=0.7, γ=0.4, y=4., maxiters=1000);
