@@ -44,7 +44,7 @@ function initrand!(g::FactorGraphTAP)
     g.m̂[:] = (2*rand(g.M) - 1)/2
 end
 
-function oneBPiter!(g::FactorGraphTAP, γ::Float64=0.)
+function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
     @extract g N M m m̂ h ξ σ
 
     # factors update
@@ -70,11 +70,10 @@ function oneBPiter!(g::FactorGraphTAP, γ::Float64=0.)
         for a=1:M
             Mtot += ξ[i, a]* m̂[a]
         end
-        h[i] = Mtot + m[i] * Ĉtot + γ*h[i]
-        newm = tanh(h[i])
+        h[i] = Mtot + m[i] * Ĉtot + r*h[i]
         oldm = m[i]
-        m[i] = newm
-        Δ = max(Δ, abs(newm - oldm))
+        m[i] = tanh(h[i])
+        Δ = max(Δ, abs(m[i] - oldm))
     end
 
     Δ
@@ -102,7 +101,7 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
 
     for it=1:maxiters
         write("it=$it ... ")
-        Δ = oneBPiter!(g, reinfpar.γ)
+        Δ = oneBPiter!(g, reinfpar.r)
         E = energy(g)
         @printf("r=%.3f γ=%.3f  E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Δ)
         update_reinforcement!(reinfpar)
