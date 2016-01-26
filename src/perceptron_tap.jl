@@ -96,7 +96,7 @@ end
 getW(mags::Vector) = Int[1-2signbit(m) for m in mags]
 
 function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
-                                , alt_when_solved::Bool=false, alt_when_converged = false
+                                , altsolv::Bool=false, altconv = false
                                 , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
@@ -105,11 +105,11 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
         E = energy(g)
         @printf("r=%.3f γ=%.3f  E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Δ)
         update_reinforcement!(reinfpar)
-        if alt_when_solved && E == 0
+        if altsolv && E == 0
             println("Found Solution!")
             break
         end
-        if alt_when_converged && Δ < ϵ
+        if altconv && Δ < ϵ
             println("Converged!")
             break
         end
@@ -157,7 +157,7 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
                 method = :reinforcement, #[:reinforcement, :decimation]
                 r::Float64 = 0., r_step::Float64= 0.001,
                 γ::Float64 = 0., γ_step::Float64=0.,
-                alt_when_solved::Bool = true,
+                altsolv::Bool = true,
                 seed::Int = -1)
 
     seed > 0 && srand(seed)
@@ -166,6 +166,6 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
 
     # if method == :reinforcement
     reinfpar = ReinfParams(r, r_step, γ, γ_step)
-    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, alt_when_solved=alt_when_solved)
+    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, altsolv=altsolv)
     return getW(mags(g))
 end

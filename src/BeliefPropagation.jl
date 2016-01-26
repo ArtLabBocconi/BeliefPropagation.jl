@@ -1,35 +1,35 @@
 module BeliefPropagation
 using LightGraphs
 import Base.show
-export KSAT, Ising
-export Perceptron, PerceptronTAP, PerceptronETAP
+export KSATBP, Ising
+export PerceptronBP, PerceptronTAP, PerceptronETAP
 
 Base.getindex(p::Ptr) = unsafe_load(p)
 Base.setindex!{T}(p::Ptr{T}, x::T) = unsafe_store!(p, x)
 Base.show(io::IO, p::Ptr) = show(io, p[])
 Base.show(p::Ptr) = show(p[])
 
-module KSAT
-    include("ksat.jl")
+module KSATBP
+    include("ksat_bp.jl")
 end
 
 module Ising
-    include("ising.jl")
-    include("tap_ising.jl")
-    include("mc_ising.jl")
+    include("ising_bp.jl")
+    include("ising_tap.jl")
+    include("ising_mc.jl")
     include("learning_hopfield.jl")
 end
 
-module Perceptron
-    include("perceptron.jl")
+module PerceptronBP
+    include("perceptron_bp.jl")
 end
 
 module PerceptronTAP
-    include("tap_perceptron.jl")
+    include("perceptron_tap.jl")
 end
 
 module PerceptronEdTAP
-    include("edtap_perceptron.jl")
+    include("perceptron_edtap.jl")
 end
 
 

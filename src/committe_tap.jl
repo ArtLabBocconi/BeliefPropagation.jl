@@ -54,6 +54,7 @@ function initrand!(g::FactorGraphTAP)
         pu[:] = rand(g.M)
     end
     for pd in g.allpd
+        # pd[:] = rand(g.M)
         pd[:] = rand(g.M)
     end
 end
@@ -79,7 +80,7 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
             Gp = G(-Mtot / √Ctot); Gm = Gp
             m̂[a] = 1 / √Ctot * (pd[a]*Gp - (1-pd[a])*Gm) / (pd[a]*Hp + (1-pd[a])*Hm)
             Ĉtot[k] += m̂[a] * (Mtot / Ctot + m̂[a])
-            pu[a] = Hp - Hm
+            pu[a] = Hp
         end
     end
     #########################################
@@ -88,20 +89,30 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
     K2 = div(K-1, 2)
     expf = Complex128[exp(2π*im*p/K) for p=0:K-1]
     expinv = Complex128[expf[(K + (-K2*p) % K) % K + 1] for p=0:K-1]
+    pp=0.2
+    qq=1-pp
     for a=1:M
-        X = ones(Complex64, K)
+        X = ones(Complex128, K)
         for p=1:K
             for k=1:K
                 X[p] *= (1-allpu[k][a]) + allpu[k][a]*expf[p]
+                # X[p] *= pp + qq*expf[p]
             end
         end
         for k=1:K
-            s = 0.
+            s = Complex128(0.)
             for p=1:K
                 s += expinv[p] * X[p] / ((1-allpu[k][a]) + allpu[k][a]*expf[p])
+                # s += expinv[p] * X[p] / (pp + qq*expf[p])
             end
-            allpd[k][a] = 0.5*(1-real(s))
-            allpd[k][a] += σ[a] == 1 ? real(s) : 0
+            sr = real(s) / K
+            sr > 1 && (sr=1.)
+            sr < 0 && (sr=0.)
+            @assert 0 <= sr <= 1
+            # @assert isapprox(sr, binomial(K-1,K2) * pp^K2 * qq^(K-1-K2), rtol=1e-5)
+            allpd[k][a] = 0.5*(1-sr)
+            allpd[k][a] += σ[a] == 1 ? sr : 0
+            @assert isfinite(allpd[k][a])
         end
     end
     #########################################
@@ -135,22 +146,33 @@ function update_reinforcement!(reinfpar::ReinfParams)
 end
 
 getW(mags::Vector{Vector{Float64}}) = [Int[1-2signbit(m) for m in magk] for magk in mags]
-
+function print_overlaps(W::Vector{Vector{Int}})
+    K = length(W)
+    N = length(W[1])
+    for k=1:K
+        for p=k+1:K
+            print(dot(W[k],W[p])/N, " ")
+        end
+    end
+    println()
+end
 function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
-                                , alt_when_solved::Bool=false, alt_when_converged = false
+                                , altsolv::Bool=false, altconv = false
                                 , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
         write("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.r)
-        E = energy(g)
+        W = getW(mags(g))
+        E = energy(g, W)
+        # print_overlaps(W)
         @printf("r=%.3f γ=%.3f  E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Δ)
         update_reinforcement!(reinfpar)
-        if alt_when_solved && E == 0
+        if altsolv && E == 0
             println("Found Solution!")
             break
         end
-        if alt_when_converged && Δ < ϵ
+        if altconv && Δ < ϵ
             println("Converged!")
             break
         end
@@ -162,6 +184,7 @@ function energy(g::FactorGraphTAP, W::Vector{Vector{Int}})
     E = 0
     for a=1:M
         σks = Int[ifelse(dot(ξ[:,a], W[k]) > 0, 1, -1) for k=1:K]
+        # println(σks)
         E += σ[a] * sum(σks) > 0 ? 0 : 1
     end
     E
@@ -185,14 +208,15 @@ mags(g::FactorGraphTAP) = g.allm
 # mags_noreinf(g::FactorGraphTAP) = Float64[mag_noreinf(v) for v in g.vnodes]
 
 
-function solve(; N::Int=1000, α::Float64=0.6, K::Int=3, seed_ξ::Int=-1, kw...)
+function solve(; N::Int=1000, α::Float64=0.6, seed_ξ::Int=-1,
+                    K::Int = 3, kw...)
     if seed_ξ > 0
         srand(seed_ξ)
     end
-    M = round(Int, α * N)
+    M = round(Int, α * K * N)
     ξ = rand([-1,1], N, M)
     σ = ones(Int, M)
-    solve(ξ, σ; kw...)
+    solve(ξ, σ; K=K, kw...)
 end
 
 function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
@@ -200,8 +224,8 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
                 K::Int=3,
                 r::Float64 = 0., r_step::Float64= 0.001,
                 γ::Float64 = 0., γ_step::Float64=0.,
-                alt_when_solved::Bool = true,
-                alt_when_converged::Bool = true,
+                altsolv::Bool = true,
+                altconv::Bool = true,
                 seed::Int = -1)
     @assert K % 2 == 1
     seed > 0 && srand(seed)
@@ -211,6 +235,6 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
     # if method == :reinforcement
     reinfpar = ReinfParams(r, r_step, γ, γ_step)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar,
-            alt_when_solved=alt_when_solved, alt_when_converged=alt_when_converged)
+            altsolv=altsolv, altconv=altconv)
     return getW(mags(g))
 end

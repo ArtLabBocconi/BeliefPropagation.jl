@@ -1,4 +1,4 @@
-include("mc_ising.jl")
+include("ising_mc.jl")
 
 function make_new_learning_weights!(g::FactorGraphIsing, H::Vector, maxiters_learning, η, λ)
     for it=1:maxiters_learning
@@ -29,11 +29,11 @@ function q_retrieval(g, ξ, βmc, niters_mc, pflip)
         end
     end
 
-    mc_ising!(σ, g.J, g.adjlist, niters=niters_mc, β=βmc)
+    ising_mc!(σ, g.J, g.adjlist, niters=niters_mc, β=βmc)
     q = 0.
     it = 0
     while it < div(niters_mc, 10)
-        mc_ising!(σ, g.J, g.adjlist, niters=1, β=βmc)
+        ising_mc!(σ, g.J, g.adjlist, niters=1, β=βmc)
         q += dot(ξ, σ) / N
         it +=1
     end
