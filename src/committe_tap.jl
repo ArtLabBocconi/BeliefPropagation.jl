@@ -45,19 +45,20 @@ end
 
 function initrand!(g::FactorGraphTAP)
     for m in g.allm
-        m[:] = (2*rand(g.N) - 1)/2
+        m[:] = 2*rand(g.N) - 1
     end
     for m̂ in g.allm̂
-        m̂[:] = (2*rand(g.M) - 1)/2
+        m̂[:] = 2*rand(g.M) - 1
     end
     for pu in g.allpu
         pu[:] = rand(g.M)
     end
     for pd in g.allpd
-        # pd[:] = rand(g.M)
+        # pd[:] = ones(g.M)
         pd[:] = rand(g.M)
     end
 end
+
 
 function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
     @extract g N M K allm allm̂ allh allpd allpu ξ σ
@@ -81,41 +82,96 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
             m̂[a] = 1 / √Ctot * (pd[a]*Gp - (1-pd[a])*Gm) / (pd[a]*Hp + (1-pd[a])*Hm)
             Ĉtot[k] += m̂[a] * (Mtot / Ctot + m̂[a])
             pu[a] = Hp
+            pu[a] < 0 && (pu[a]=0.)
+            pu[a] > 1 && (pu[a]=1.)
         end
     end
     #########################################
 
     ## update exact factor second layer ###
+
     K2 = div(K-1, 2)
     expf = Complex128[exp(2π*im*p/K) for p=0:K-1]
-    expinv = Complex128[expf[(K + (-K2*p) % K) % K + 1] for p=0:K-1]
-    pp=0.2
-    qq=1-pp
+    expinv0 = Complex128[(-1)^p *exp(π*im*p/K) for p=0:K-1]
+    expinvp = Complex128[(
+            a =(-1)^p *exp(π*im*p/K);
+            b = exp(-2π*im*p/K);
+            p==0 ? K2 : a*b/(1-b)*(1-b^K2))
+            for p=0:K-1]
+    expinvm = Complex128[(
+            a =(-1)^p *exp(π*im*p/K);
+            b = exp(2π*im*p/K);
+            p==0 ? K2 : a*b/(1-b)*(1-b^K2))
+            for p=0:K-1]
+    # qq=1-pp
+    # pp=0.2
     for a=1:M
         X = ones(Complex128, K)
         for p=1:K
             for k=1:K
+                allpu[k][a]<0 && (allpu[k][a]=0)
+                allpu[k][a]>1 && (allpu[k][a]=1)
                 X[p] *= (1-allpu[k][a]) + allpu[k][a]*expf[p]
                 # X[p] *= pp + qq*expf[p]
             end
         end
         for k=1:K
-            s = Complex128(0.)
+            s0 = Complex128(0.)
+            sp = Complex128(0.)
+            sm = Complex128(0.)
             for p=1:K
-                s += expinv[p] * X[p] / ((1-allpu[k][a]) + allpu[k][a]*expf[p])
+                xp = X[p] / ((1-allpu[k][a]) + allpu[k][a]*expf[p])
+                s0 += expinv0[p] * xp
+                sp += expinvp[p] * xp
+                sm += expinvm[p] * xp
                 # s += expinv[p] * X[p] / (pp + qq*expf[p])
             end
-            sr = real(s) / K
+            @assert abs(real(s0/K)-0.5) < 0.5 + 1e-10;
+            real(s0) < 0 && (s0=0.)
+            real(s0) > K && (s0=K)
+            @assert abs(real(sp/K)-0.5) < 0.5+ 1e-10;
+            real(sp) < 0 && (sp=0.)
+            real(sp) > K && (sp=K)
+            @assert abs(real(sm/K)-0.5) < 0.5+ 1e-10;
+            real(sm) < 0 && (sm=0.)
+            real(sm) > K && (sm=K)
+            # if !(1>=real(sp/K)>=0)
+            #     for i=1:K
+            #         println(allpu[i][a])
+            #     end
+            #     println(s0/K)
+            #     println(sp/K)
+            #     println(sm/K)
+            #     @assert 1>=real(sm/K)>=0;
+            # end
+            # @assert 1>=real(sp/K)>=0;
+            # if !(1>=real(sm/K)>=0)
+            #     println(sm/K)
+            #     @assert 1>=real(sm/K)>=0;
+            # end
+            # @assert abs(real((s0+sp+sm)/K - 1)) < 1e-8;
+            sr = σ[a] > 0 ? real(s0 /(s0+2sp)) : -real(s0 /(s0+2sm))
+            if !isfinite(sr)
+                println("@@",s0," " ,sp, " " ,sm," " , sr)
+                continue
+                # @assert isfinite(sr)
+            end
+            if !(abs(sr) < 1 + 1e-10)
+                continue
+                println("@@",s0," " ,sp, " " ,sm," " , sr)
+                println(sr)
+                @assert abs(sr) < 1 + 1e-10
+            end
             sr > 1 && (sr=1.)
-            sr < 0 && (sr=0.)
-            @assert 0 <= sr <= 1
+            sr < -1 && (sr=0.)
             # @assert isapprox(sr, binomial(K-1,K2) * pp^K2 * qq^(K-1-K2), rtol=1e-5)
-            allpd[k][a] = 0.5*(1-sr)
-            allpd[k][a] += σ[a] == 1 ? sr : 0
+            allpd[k][a] = 0.5*(1+sr)
             @assert isfinite(allpd[k][a])
         end
     end
     #########################################
+
+
 
     ## variables update  #####################
     Δ = 0.
@@ -146,15 +202,20 @@ function update_reinforcement!(reinfpar::ReinfParams)
 end
 
 getW(mags::Vector{Vector{Float64}}) = [Int[1-2signbit(m) for m in magk] for magk in mags]
-function print_overlaps(W::Vector{Vector{Int}})
+function print_overlaps(W::Vector{Vector{Int}}; meanvar = true)
     K = length(W)
     N = length(W[1])
+    q = Float64[]
     for k=1:K
         for p=k+1:K
-            print(dot(W[k],W[p])/N, " ")
+            push!(q, dot(W[k],W[p])/N)
         end
     end
-    println()
+    if meanvar
+        println("overalaps mean,std = ",mean(q), ",", std(q))
+    else
+        println(q)
+    end
 end
 function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
                                 , altsolv::Bool=false, altconv = false
@@ -165,7 +226,7 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
         Δ = oneBPiter!(g, reinfpar.r)
         W = getW(mags(g))
         E = energy(g, W)
-        # print_overlaps(W)
+        print_overlaps(W, meanvar=true)
         @printf("r=%.3f γ=%.3f  E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Δ)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
@@ -225,7 +286,7 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
                 r::Float64 = 0., r_step::Float64= 0.001,
                 γ::Float64 = 0., γ_step::Float64=0.,
                 altsolv::Bool = true,
-                altconv::Bool = true,
+                altconv::Bool = false,
                 seed::Int = -1)
     @assert K % 2 == 1
     seed > 0 && srand(seed)

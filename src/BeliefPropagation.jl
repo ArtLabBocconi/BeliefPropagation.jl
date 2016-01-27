@@ -3,6 +3,7 @@ using LightGraphs
 import Base.show
 export KSATBP, Ising
 export PerceptronBP, PerceptronTAP, PerceptronETAP
+export CommitteeBP, CommitteeTAP
 
 Base.getindex(p::Ptr) = unsafe_load(p)
 Base.setindex!{T}(p::Ptr{T}, x::T) = unsafe_store!(p, x)
@@ -31,6 +32,16 @@ end
 module PerceptronEdTAP
     include("perceptron_edtap.jl")
 end
+
+module CommitteeBP
+    #Work In Progress
+    include("committee_bp.jl")
+end
+
+module CommitteeTAP
+    include("committee_tap.jl")
+end
+
 
 
 end # module
