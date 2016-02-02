@@ -101,10 +101,10 @@ function oneBPiter!(g::FactorGraphTAP)
     Ctot =0.; Rtot = 0.; R̂tot = 0.; O = 0.; Ô = 0.
 
     for i=1:N
-        Ctot += 1 - m[i]^2
+        Ctot += 1 - ρ[i]
         Rtot += ρ[i] - m[i]^2
-        O += y*(ρ[i] - m[i]^2) + 1 - m[i]^2
-        # O += 1 - m[i]^2
+        # O += y*(ρ[i] - m[i]^2) + 1 - m[i]^2
+        O += y*(ρ[i] - m[i]^2) + 1 - ρ[i]
     end
     # println("@ ", Ctot, " ", Rtot, " ", O)
     @assert Ctot > 0
@@ -121,8 +121,8 @@ function oneBPiter!(g::FactorGraphTAP)
         @assert isfinite(j0)
         @assert isfinite(j1)
         @assert isfinite(j2)
-        @assert j0 > 0
-        @assert j2 > 0
+        j0 <= 0 && (j0=1e-5)
+        j2 <= 0 && (j0=1e-10)
         mh[a] = σ[a]/√Ctot * j1 / j0
         ρh[a] = 1/Ctot * j2 / j0
         @assert isfinite(mh[a])
@@ -133,7 +133,7 @@ function oneBPiter!(g::FactorGraphTAP)
         # Ô +=  - (mh[a]^2 + 1/(Ctot)*(mh[a]*Mtot))
     end
     # println("@ ", R̂tot, " ", Ô)
-
+    R̂tot <= 0. && (R̂tot=1e-10)
 
     Δ = 0.
     # variables update
@@ -172,7 +172,7 @@ end
 getW(mags::Vector) = Int[1-2signbit(m) for m in mags]
 
 function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
-                                , alt_when_solved::Bool=false, alt_when_converged = false
+                                , altsolv::Bool=false, altconv = false
                                 , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
@@ -181,16 +181,41 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
         E = energy(g)
         @printf("r=%.3f γ=%.3f  E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Δ)
         # update_reinforcement!(reinfpar)
-        if alt_when_solved && E == 0
+        if altsolv && E == 0
             println("Found Solution!")
             break
         end
-        if alt_when_converged && Δ < ϵ
+        if altconv && Δ < ϵ
             println("Converged!")
             break
         end
     end
 end
+
+### Thermodinamic Functions ##########
+type OrderParams
+    Ψ::Float64
+    Σext::Float64
+    Σint::Float64
+    S::Float64
+    Ẽ::Float64
+    q₀::Float64
+    q₁::Float64
+    q̃::Float64
+    q̂₀::Float64
+    q̂₁::Float64
+    δq::Float64
+    δq̂::Float64
+    function OrderParams(Ψ, Σext, Σint, S, Ẽ, q₀, q₁, q̃, q̂₀, q̂₁, y)
+        new(Ψ, Σext, Σint, S, Ẽ, q₀, q₁, q̃, q̂₀, q̂₁, (q₁ - q₀) * y, (q̂₁ - q̂₀) * y)
+    end
+end
+function shortshow(io::IO, x)
+    T = typeof(x)
+    print(io, T.name.name, "(", join([string(f, "=", getfield(x, f)) for f in fieldnames(T)], ","), ")")
+end
+Base.show(io::IO, op::OrderParams) = shortshow(io, op)
+
 
 function energy(g::FactorGraphTAP, W::Vector{Int})
     @extract g M σ ξ
@@ -199,6 +224,49 @@ function energy(g::FactorGraphTAP, W::Vector{Int})
         E += σ[a] * dot(ξ[:,a], W) > 0 ? 0 : 1
     end
     E
+end
+
+function therm_functions(g::FactorGraphTAP)
+    @extract g N M m ρ mh ρh ξ σ γ y
+    q0 = 1/N * dot(m,m)
+    q1 = 1/N * sum(ρ)
+    q̂0 = dot(mh,mh)
+    q̂1 = sum(ρh)
+    ψ=0.; Σ=0.
+
+    ## SIMIL UPDATE PART #############
+    Ctot =0.; Rtot = 0.; R̂tot = 0.; O = 0.; Ô = 0.
+    for i=1:N
+        Ctot += 1 - ρ[i]
+        Rtot += ρ[i] - m[i]^2
+        O += y*(ρ[i] - m[i]^2) + 1 - ρ[i]
+    end
+    for a=1:M
+        Mtot = 0.
+        for i=1:N
+            Mtot += ξ[i,a] * m[i]
+        end
+        Mtot += -mh[a]*O
+        j0 = J0(σ[a]*Mtot/√Ctot, √Rtot/√Ctot, y)
+        R̂tot += ρh[a] - mh[a]^2
+        Ô += y*(ρh[a] - mh[a]^2) - (ρh[a] + 1/(Ctot + Rtot)*(mh[a]*Mtot + (y-1)*ρh[a]*Rtot))
+
+        ψ += log(j0)
+    end
+    for i=1:N
+        Mtot = 0.
+        for a=1:M
+            Mtot += ξ[i, a]* mh[a]
+        end
+        Mtot += - m[i] * Ô
+        k0 = K0(Mtot, √R̂tot, γ, y)
+        ψ += log(k0)
+    end
+    ψ /= N
+    ψ += -0.5y*(y-1)* q̂1*q1 + 0.5y^2*q̂0*q0 -0.5y*q̂1
+    ψ += y * log(2)
+    ################
+    OrderParams(ψ, 0., 0., 0., 0., q0, q1, 0., q̂0, q̂1, y)
 end
 
 energy(g::FactorGraphTAP) = energy(g, getW(mags(g)))
@@ -224,7 +292,9 @@ function solve(; N::Int=1000, α::Float64=0.6, seed_ξ::Int=-1, kw...)
         srand(seed_ξ)
     end
     M = round(Int, α * N)
-    ξ = rand([-1,1], N, M)
+    ξt = Vector{Int}[rand(-1.0:2.0:1.0, N) for a = 1:M]
+    # ξ = rand([-1,1], N, M)
+    ξ = hcat(ξt...)
     σ = ones(Int, M)
     solve(ξ, σ; kw...)
 end
@@ -233,8 +303,8 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
                 method = :reinforcement, #[:reinforcement, :decimation]
                 y::Float64 = 0., y_step::Float64= 0.001,
                 γ::Float64 = 0., γ_step::Float64=0.,
-                alt_when_solved::Bool = true,
-                alt_when_converged::Bool = true,
+                altsolv::Bool = true,
+                altconv::Bool = true,
                 n= 100,
                 seed::Int = -1)
     global nint = n
@@ -245,6 +315,6 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
     # if method == :reinforcement
     reinfpar = ReinfParams(y, y_step, γ, γ_step)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar
-            , alt_when_solved=alt_when_solved, alt_when_converged=alt_when_converged)
-    return getW(mags(g))
+            , altsolv=altsolv, altconv=altconv)
+    return g, getW(mags(g))
 end
