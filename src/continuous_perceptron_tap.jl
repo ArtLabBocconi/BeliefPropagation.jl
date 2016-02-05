@@ -23,6 +23,8 @@ type FactorGraphTAP
     mh::Vector{Float64}
     ρh::Vector{Float64}
     λ::Float64 #L2 regularizer
+    Mtot::Vector{Float64}
+    Ctot::Vector{Float64}
     h1::Vector{Float64} # for reinforcement
     h2::Vector{Float64} # for reinforcement
     function FactorGraphTAP(ξ::Matrix, σ::Vector{Int}, λ::Float64=1)
@@ -31,7 +33,7 @@ type FactorGraphTAP
         @assert size(ξ, 2) == M
         println("# N=$N M=$M α=$(M/N)")
         new(N, M, ξ, σ, zeros(N), zeros(N), zeros(M), zeros(M)
-            , λ, zeros(N), zeros(N))
+            , λ, zeros(N), zeros(N), zeros(N), zeros(N))
     end
 end
 
@@ -46,46 +48,62 @@ type ReinfParams
 end
 
 function initrand!(g::FactorGraphTAP)
-    g.m[:] = (2*rand(g.N) - 1)/2
-    g.ρ[:] = 1e-5
-    g.mh[:] = (2*rand(g.M) - 1)/2
-    g.ρh[:] = 1e-5
+    @extract g N M m ρ mh ρh h1 h2 ξ σ λ Mtot Ctot
+    m[:] = (2*rand(N) - 1)/2
+    ρ[:] = 1e-5
+    mh[:] = (2*rand(M) - 1)/2
+    ρh[:] = 1e-5
+
+    #bookkeeping variables
+    for i=1:N
+        Mtot[i] = 0
+        Ctot[i] = 0
+        h1[i] = 0
+        h2[i] = 0
+        for a=1:M
+            Mtot[i] += ξ[i, a]* mh[a]
+            Ctot[i] += ξ[i, a]^2 * ρh[a]
+        end
+    end
 end
 
-function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
-    @extract g N M m ρ mh ρh h1 h2 ξ σ λ
-
+function oneBPiter!(g::FactorGraphTAP, r::Float64=0., size_batch = -1)
+    @extract g N M m ρ mh ρh h1 h2 ξ σ λ Mtot Ctot
+    (1 <= size_batch <= M) || (size_batch = M)
     # factors update
     # Ĉtot = 0.
-    for a=1:M
-        Mtot = 0.; Ctot = 0.
+    batch = randperm(M)[1:size_batch]
+    mhnew = copy(mh)
+    ρhnew = copy(ρh)
+    for a in batch
+        Mhtot = 0.; Chtot = 0.
         for i=1:N
-            Ctot +=  ξ[i]^2*ρ[i]
-            Mtot += ξ[i,a] * m[i]
+            Chtot += ξ[i,a]^2 * ρ[i]
+            Mhtot += ξ[i,a] * m[i]
         end
-        Mtot += -mh[a]*Ctot
-        x = σ[a]*Mtot / sqrt(Ctot)
+        Mtot += -mh[a]*Chtot
+        x = σ[a]*Mhtot / sqrt(Chtot)
         gh = GH(-x)
-        mh[a] = σ[a]/ sqrt(Ctot) * gh
-        ρh[a] = 1/Ctot *(x*gh + gh^2)
+        mhnew[a] = σ[a]/ sqrt(Chtot) * gh
+        ρhnew[a] = 1/Chtot *(x*gh + gh^2)
     end
 
     Δ = 0.
     # variables update
     for i=1:N
-        Mtot = 0.
-        Ctot = 0.
-        for a=1:M
-            Mtot += ξ[i, a]* mh[a]
-            Ctot += ξ[i, a]^2* ρh[a]
+        for a in batch
+            Mtot[i] += ξ[i, a]* (mhnew[a]-mh[a])
+            Ctot[i] += ξ[i, a]^2 * (ρhnew[a]-ρh[a])
         end
-        h1[i] = Mtot + m[i] * Ctot + r*h1[i]
-        h2[i] = λ + Ctot + r*h2[i]
+        h1[i] = Mtot[i] + m[i] * Ctot[i] + r*h1[i]
+        h2[i] = λ + Ctot[i] + r*h2[i]
         oldm = m[i]
         m[i] = h1[i]/h2[i]
         ρ[i] = 1/h2[i]
         Δ = max(Δ, abs(m[i] - oldm))
     end
+    mh[:] = mhnew
+    ρh[:] = ρhnew
 
     Δ
 end
