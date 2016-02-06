@@ -17,6 +17,7 @@ type FactorGraphTAP
     N::Int
     M::Int
     ξ::Matrix
+    ξ2::Matrix
     σ::Vector{Int}
     m::Vector{Float64}
     ρ::Vector{Float64}

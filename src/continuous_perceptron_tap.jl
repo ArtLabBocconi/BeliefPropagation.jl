@@ -17,6 +17,7 @@ type FactorGraphTAP
     N::Int
     M::Int
     ξ::Matrix
+    ξ2::Matrix
     σ::Vector{Int}
     m::Vector{Float64}
     ρ::Vector{Float64}
@@ -32,7 +33,7 @@ type FactorGraphTAP
         M = length(σ)
         @assert size(ξ, 2) == M
         println("# N=$N M=$M α=$(M/N)")
-        new(N, M, ξ, σ, zeros(N), zeros(N), zeros(M), zeros(M)
+        new(N, M, ξ, ξ.^2, σ, zeros(N), zeros(N), zeros(M), zeros(M)
             , λ, zeros(N), zeros(N), zeros(N), zeros(N))
     end
 end
@@ -48,7 +49,7 @@ type ReinfParams
 end
 
 function initrand!(g::FactorGraphTAP)
-    @extract g N M m ρ mh ρh h1 h2 ξ σ λ Mtot Ctot
+    @extract g N M m ρ mh ρh h1 h2 ξ ξ2 σ λ Mtot Ctot
     m[:] = (2*rand(N) - 1)/2
     ρ[:] = 1e-5
     mh[:] = (2*rand(M) - 1)/2
@@ -56,45 +57,31 @@ function initrand!(g::FactorGraphTAP)
 
     #bookkeeping variables
     for i=1:N
-        Mtot[i] = 0
-        Ctot[i] = 0
         h1[i] = 0
         h2[i] = 0
-        for a=1:M
-            Mtot[i] += ξ[i, a]* mh[a]
-            Ctot[i] += ξ[i, a]^2 * ρh[a]
-        end
     end
 end
 
-function oneBPiter!(g::FactorGraphTAP, r::Float64=0., size_batch = -1)
-    @extract g N M m ρ mh ρh h1 h2 ξ σ λ Mtot Ctot
-    (1 <= size_batch <= M) || (size_batch = M)
-    # factors update
-    # Ĉtot = 0.
-    batch = randperm(M)[1:size_batch]
-    mhnew = copy(mh)
-    ρhnew = copy(ρh)
-    for a in batch
-        Mhtot = 0.; Chtot = 0.
-        for i=1:N
-            Chtot += ξ[i,a]^2 * ρ[i]
-            Mhtot += ξ[i,a] * m[i]
-        end
-        Mtot += -mh[a]*Chtot
+function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
+    @extract g N M m ρ mh ρh h1 h2 ξ ξ2 σ λ Mtot Ctot
+
+    Mtot[:] = 0
+    Ctot[:] = 0
+    for a in 1:M
+        Chtot = dot(ξ2[:,a], ρ)
+        Mhtot = dot(ξ[:,a], m)
+        Mhtot += -mh[a]*Chtot
         x = σ[a]*Mhtot / sqrt(Chtot)
         gh = GH(-x)
-        mhnew[a] = σ[a]/ sqrt(Chtot) * gh
-        ρhnew[a] = 1/Chtot *(x*gh + gh^2)
+        mh[a] = σ[a]/ sqrt(Chtot) * gh
+        ρh[a] = 1/Chtot *(x*gh + gh^2)
+        Mtot[:] += ξ[:, a] * mh[a]
+        Ctot[:] += ξ2[:, a] * ρh[a]
     end
 
     Δ = 0.
     # variables update
     for i=1:N
-        for a in batch
-            Mtot[i] += ξ[i, a]* (mhnew[a]-mh[a])
-            Ctot[i] += ξ[i, a]^2 * (ρhnew[a]-ρh[a])
-        end
         h1[i] = Mtot[i] + m[i] * Ctot[i] + r*h1[i]
         h2[i] = λ + Ctot[i] + r*h2[i]
         oldm = m[i]
@@ -102,8 +89,6 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0., size_batch = -1)
         ρ[i] = 1/h2[i]
         Δ = max(Δ, abs(m[i] - oldm))
     end
-    mh[:] = mhnew
-    ρh[:] = ρhnew
 
     Δ
 end
