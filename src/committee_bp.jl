@@ -1,5 +1,6 @@
 using MacroUtils
 
+#TODO DA FINIRE
 typealias Mess Float64
 typealias PMess Ptr{Mess}
 typealias VMess Vector{Mess}
@@ -34,8 +35,30 @@ type ExactFact
     pu::VMess
     pd::VPMess
     σ::Int
+
+    #bookkeeping
+    expf::Vector{Complex128}
+    expinv0::Vector{Complex128}
+    expinvp::Vector{Complex128}
+    expinvm::Vector{Complex128}
 end
-ExactFact(σ) = ExactFact(VMess(), VPMess(), σ)
+function ExactFact(σ, K)
+    K2 = div(K-1, 2)
+    expf = Complex128[exp(2π*im*p/K) for p=0:K-1]
+    expinv0 = Complex128[(-1)^p *exp(π*im*p/K) for p=0:K-1]
+    expinvp = Complex128[(
+            a =(-1)^p *exp(π*im*p/K);
+            b = exp(-2π*im*p/K);
+            p==0 ? K2 : a*b/(1-b)*(1-b^K2))
+            for p=0:K-1]
+    expinvm = Complex128[(
+            a =(-1)^p *exp(π*im*p/K);
+            b = exp(2π*im*p/K);
+            p==0 ? K2 : a*b/(1-b)*(1-b^K2))
+            for p=0:K-1]
+
+    ExactFact(VMess(), VPMess(), σ, expf, expinv0, expinvp, expinvm)
+end
 
 type Var
     m̂::VMess
@@ -49,6 +72,7 @@ Var() = Var(VMess(), VPMess(), Mess())
 type FactorGraph
     N::Int
     M::Int
+    K::Int
     ξ::Matrix{Int}
     σ::Vector{Int}
     fnodes::Vector{Fact}
@@ -56,13 +80,12 @@ type FactorGraph
     exactf::Vector{ExactFact}
 
     function FactorGraph(ξ::Matrix{Int}, σ::Vector{Int}, K::Int)
-        N = size(ξ, 1)
-        M = length(σ)
-        @assert size(ξ, 2) == M
+        N, M = size(ξ)
+        @assert size(ξ, 2) == length(σ)
         println("# N=$N M=$M α=$(M/N)")
         fnodes = [Fact(sub(ξ, :, a), σ[a]) for (a,k) in product(1:M,1:K)]
         vnodes = [Var() for (a,k) in product(1:M,1:K)]
-        exactf = [ExactFact() for k=1:K]
+        exactf = [ExactFact(σ[a], K) for a=1:M]
         ## Reserve memory in order to avoid invalidation of Refs
         for f in fnodes
             sizehint!(f.m, N)
@@ -86,7 +109,7 @@ type FactorGraph
 
         for i=1:N, a=1:M, k=1:K
             ak = a + M*(k-1)
-            ik = i + M*(k-1)
+            ik = i + N*(k-1)
             f = fnodes[ak]
             v = vnodes[ik]
 
@@ -97,7 +120,7 @@ type FactorGraph
             push!(v.m, getref(f.m, length(f.m)))
         end
 
-        new(N, M, ξ, σ, fnodes, vnodes, exactf)
+        new(N, M, K, ξ, σ, fnodes, vnodes, exactf)
     end
 end
 
@@ -148,11 +171,8 @@ end
 
 
 function update!(f::ExactFact)
-    @extract f σ pu pd
+    @extract f σ pu pd expf expinv0 expinvm expinvp
     K = deg(f)
-    K2 = div(K-1, 2)
-    expf = Complex128[exp(2π*im*p/K) for p=0:K-1]
-    expinv = Complex128[expf[(K + (-K2*p) % K) % K + 1] for p=0:K-1]
     X = ones(Complex128, K)
     for p=1:K
         for k=1:K
@@ -160,13 +180,17 @@ function update!(f::ExactFact)
         end
     end
     for k=1:K
-        s = 0.
+        s0 = Complex128(0.)
+        sp = Complex128(0.)
+        sm = Complex128(0.)
         for p=1:K
-            s += expinv[p] * X[p] / ((1-pu[k]) + pu[k]*expf[p])
+            xp = X[p] / ((1-pu[k]) + pu[k]*expf[p])
+            s0 += expinv0[p] * xp
+            sp += expinvp[p] * xp
+            sm += expinvm[p] * xp
         end
-        sr = real(s) / K
-        pd[k][] = 0.5*(1-sr)
-        pd[k][] += σ[a] == 1 ? sr : 0
+        sr = σ > 0 ? real(s0 /(s0+2sp)) : -real(s0 /(s0+2sm))
+        pd[k][] = 0.5*(1+sr)
         @assert isfinite(pd[k][])
     end
 end

@@ -135,21 +135,7 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
             @assert abs(real(sm/K)-0.5) < 0.5+ 1e-10;
             real(sm) < 0 && (sm=0.)
             real(sm) > K && (sm=K)
-            # if !(1>=real(sp/K)>=0)
-            #     for i=1:K
-            #         println(allpu[i][a])
-            #     end
-            #     println(s0/K)
-            #     println(sp/K)
-            #     println(sm/K)
-            #     @assert 1>=real(sm/K)>=0;
-            # end
-            # @assert 1>=real(sp/K)>=0;
-            # if !(1>=real(sm/K)>=0)
-            #     println(sm/K)
-            #     @assert 1>=real(sm/K)>=0;
-            # end
-            # @assert abs(real((s0+sp+sm)/K - 1)) < 1e-8;
+
             sr = σ[a] > 0 ? real(s0 /(s0+2sp)) : -real(s0 /(s0+2sm))
             if !isfinite(sr)
                 println("@@",s0," " ,sp, " " ,sm," " , sr)
