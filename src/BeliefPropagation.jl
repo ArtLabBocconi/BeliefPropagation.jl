@@ -15,31 +15,31 @@ module KSATBP
 end
 
 module Ising
-    include("ising_bp.jl")
-    include("ising_tap.jl")
-    include("ising_mc.jl")
-    include("learning_hopfield.jl")
+    include("ising/ising_bp.jl")
+    include("ising/ising_tap.jl")
+    include("ising/ising_mc.jl")
+    include("ising/learning_hopfield.jl")
 end
 
 module PerceptronBP
-    include("perceptron_bp.jl")
+    include("perceptron/perceptron_bp.jl")
 end
 
 module PerceptronTAP
-    include("perceptron_tap.jl")
+    include("perceptron/perceptron_tap.jl")
 end
 
 module PerceptronEdTAP
-    include("perceptron_edtap.jl")
+    include("perceptron/perceptron_edtap.jl")
 end
 
 module CommitteeBP
     #Work In Progress
-    include("committee_bp.jl")
+    include("deeplearning/committee_bp.jl")
 end
 
 module CommitteeTAP
-    include("committee_tap.jl")
+    include("deeplearning/committee_tap.jl")
 end
 
 
