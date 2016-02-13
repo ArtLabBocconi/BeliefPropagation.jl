@@ -21,7 +21,7 @@ let s = Dict{Int,Tuple{Vector{Float64},Vector{Float64}}}()
         return (map(Float64, x * √big(2.0)), map(Float64, w / √(big(π))))
     end
 end
-function ∫D(f; n=nint, int=nothing)
+function ∫D(f; n=nint)
     (xs, ws) = gw(n)
     s = 0.0
     for (x,w) in zip(xs, ws)

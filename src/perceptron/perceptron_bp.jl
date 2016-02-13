@@ -5,6 +5,12 @@ typealias P Ptr{Mess}
 typealias VMess Vector{Mess}
 typealias VPMess Vector{P}
 
+Base.getindex(p::Ptr) = unsafe_load(p)
+Base.setindex!{T}(p::Ptr{T}, x::T) = unsafe_store!(p, x)
+Base.show(io::IO, p::Ptr) = show(io, p[])
+Base.show(p::Ptr) = show(p[])
+
+
 getref(v::Vector, i::Integer) = pointer(v, i)
 Mess() = Mess(0.)
 
@@ -162,8 +168,9 @@ end
 
 getW(mags::Vector) = Int[1-2signbit(m) for m in mags]
 
-function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5, altsolv::Bool=false
-                                 , reinfpar::ReinfParams=ReinfParams())
+function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
+                    , altsolv::Bool=false,altconv::Bool=true
+                    , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
         write("it=$it ... ")
@@ -175,7 +182,7 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5, alts
             println("Found Solution!")
             break
         end
-        if Δ < ϵ
+        if altconv && Δ < ϵ
             println("Converged!")
             break
         end
@@ -226,7 +233,7 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
                 method = :reinforcement, #[:reinforcement, :decimation]
                 r::Float64 = 0., r_step::Float64= 0.001,
                 γ::Float64 = 0., γ_step::Float64=0.,
-                altsolv::Bool = true,
+                altsolv::Bool = true, altconv::Bool=false,
                 seed::Int = -1)
 
     seed > 0 && srand(seed)
@@ -235,6 +242,7 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
 
     # if method == :reinforcement
     reinfpar = ReinfParams(r, r_step, γ, γ_step)
-    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, altsolv=altsolv)
+    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar
+        , altsolv=altsolv, altconv=altconv)
     return getW(mags(g))
 end

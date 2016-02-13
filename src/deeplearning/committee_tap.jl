@@ -17,19 +17,31 @@ type FactorGraphTAP
     K::Int
     ξ::Matrix{Int}
     σ::Vector{Int}
+
     allm::Vector{Vector{Float64}}
     allm̂::Vector{Vector{Float64}}
     allh::Vector{Vector{Float64}} # for reinforcement
     allpu::Vector{Vector{Float64}} # pup : p(σ=up) from first layer to second
     allpd::Vector{Vector{Float64}} # pdown : p(σ=up) from second layer to first
 
-    function FactorGraphTAP(ξ::Matrix{Int}, σ::Vector{Int}, K::Int)
+    Mtot::Vector{Vector{Float64}}
+    Ctot::Vector{Float64}
+
+    topmask::Vector{Int}
+
+
+    function FactorGraphTAP(ξ::Matrix{Int}, σ::Vector{Int}, K::Int
+                ; hastopmask = true)
         N = size(ξ, 1)
         M = length(σ)
+        topmask = hastopmask ? rand(1:K, M) : Vector{Int}()
         @assert size(ξ, 2) == M
         println("# N=$N M=$M α=$(M/N)")
-        new(N, M, K, ξ, σ, [zeros(N) for k=1:K], [zeros(M) for k=1:K]
-            , [zeros(N) for k=1:K], [zeros(M) for k=1:K], [zeros(M) for k=1:K])
+        new(N, M, K, ξ, σ
+            , [zeros(N) for k=1:K], [zeros(M) for k=1:K]
+            , [zeros(N) for k=1:K], [zeros(M) for k=1:K], [zeros(M) for k=1:K]
+            , [zeros(N) for k=1:K], zeros(K)
+            , topmask)
     end
 end
 
@@ -59,31 +71,43 @@ function initrand!(g::FactorGraphTAP)
     end
 end
 
-
 function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
-    @extract g N M K allm allm̂ allh allpd allpu ξ σ
+    @extract g N M K allm allm̂ Mtot Ctot allh allpd allpu ξ σ topmask
+
 
     ## factors update ################
-    Ĉtot = zeros(K)
     for k=1:K
-        m = allm[k]; m̂=allm̂[k]; pd=allpd[k]; pu=allpu[k]
-        Ctot = float(N)
+        Mtot[k][:] = 0.
+        Ctot[k] = 0.
+        m = allm[k]; m̂=allm̂[k]; pd=allpd[k]; pu=allpu[k]; Mt=Mtot[k]
+        Chtot = 0.
         for i=1:N
-            Ctot -= m[i]^2
+            Chtot += 1 - m[i]^2
         end
+        @assert Chtot > 0
         for a=1:M
-            Mtot = 0.
+            # Mhtot = dot(sub(ξ,:,a),m)
+            Mhtot = 0.
             for i=1:N
-                Mtot += ξ[i,a] * m[i]
+                Mhtot += ξ[i,a]*m[i]
             end
-            Mtot += -m̂[a]*Ctot
-            Hp = H(-Mtot / √Ctot); Hm = 1-Hp
-            Gp = G(-Mtot / √Ctot); Gm = Gp
-            m̂[a] = 1 / √Ctot * (pd[a]*Gp - (1-pd[a])*Gm) / (pd[a]*Hp + (1-pd[a])*Hm)
-            Ĉtot[k] += m̂[a] * (Mtot / Ctot + m̂[a])
+            Mhtot += -m̂[a]*Chtot
+            Hp = H(-Mhtot / √Chtot); Hm = 1-Hp
+            Gp = G(-Mhtot / √Chtot); Gm = Gp
+            @assert pd[a]*Hp + (1-pd[a])*Hm > 0
+            # m̂[a] = 1 / √Ctot * (pd[a]*Gp - (1-pd[a])*Gm) / (pd[a]*Hp + (1-pd[a])*Hm)
+            m̂[a] = 1 / √Chtot * (pd[a]*Gp - (1-pd[a])*Gm) / (pd[a]*Hp + (1-pd[a])*Hm)
+            @assert isfinite(m̂[a])
+
+            Ctot[k] += m̂[a] * (Mhtot / Chtot + m̂[a])
+            for i=1:N
+                Mt[i] += ξ[i,a] * m̂[a]
+            end
             pu[a] = Hp
-            pu[a] < 0 && (pu[a]=0.)
-            pu[a] > 1 && (pu[a]=1.)
+            @assert isfinite(pu[a])
+            pu[a] < 0 && (pu[a]=1e-8)
+            pu[a] > 1 && (pu[a]=1-1e-8)
+
         end
     end
     #########################################
@@ -106,6 +130,9 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
     # qq=1-pp
     # pp=0.2
     for a=1:M
+        if length(topmask) > 0
+            allpu[topmask[a]][a] = σ[a] > 0 ? 0 : 1
+        end
         X = ones(Complex128, K)
         for p=1:K
             for k=1:K
@@ -126,15 +153,15 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
                 sm += expinvm[p] * xp
                 # s += expinv[p] * X[p] / (pp + qq*expf[p])
             end
-            @assert abs(real(s0/K)-0.5) < 0.5 + 1e-10;
-            real(s0) < 0 && (s0=0.)
-            real(s0) > K && (s0=K)
-            @assert abs(real(sp/K)-0.5) < 0.5+ 1e-10;
-            real(sp) < 0 && (sp=0.)
-            real(sp) > K && (sp=K)
-            @assert abs(real(sm/K)-0.5) < 0.5+ 1e-10;
-            real(sm) < 0 && (sm=0.)
-            real(sm) > K && (sm=K)
+            @assert abs(real(s0/K)-0.5) < 0.5 + 1e-7;
+            real(s0) < 0 && (s0=0. + 1e-7)
+            real(s0) > K && (s0=K-1e-7)
+            @assert abs(real(sp/K)-0.5) < 0.5+ 1e-7;
+            real(sp) < 0 && (sp=0.+1e-7)
+            real(sp) > K && (sp=K-1e-7)
+            @assert abs(real(sm/K)-0.5) < 0.5+ 1e-7;
+            real(sm) < 0 && (sm=0.+1e-7)
+            real(sm) > K && (sm=K-1e-7)
 
             sr = σ[a] > 0 ? real(s0 /(s0+2sp)) : -real(s0 /(s0+2sm))
             if !isfinite(sr)
@@ -142,17 +169,21 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
                 continue
                 # @assert isfinite(sr)
             end
-            if !(abs(sr) < 1 + 1e-10)
+            if !(abs(sr) < 1 + 1e-7)
                 continue
                 println("@@",s0," " ,sp, " " ,sm," " , sr)
                 println(sr)
-                @assert abs(sr) < 1 + 1e-10
+                @assert abs(sr) < 1 + 1e-8
             end
             sr > 1 && (sr=1.)
-            sr < -1 && (sr=0.)
+            sr < -1 && (sr=-1.)
             # @assert isapprox(sr, binomial(K-1,K2) * pp^K2 * qq^(K-1-K2), rtol=1e-5)
             allpd[k][a] = 0.5*(1+sr)
             @assert isfinite(allpd[k][a])
+
+            if length(topmask) > 0
+                allpd[topmask[a]][a] = 0.5
+            end
         end
     end
     #########################################
@@ -162,13 +193,9 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
     ## variables update  #####################
     Δ = 0.
     for k=1:K
-        m = allm[k]; m̂=allm̂[k]; h=allh[k]
-        for i=1:N
-            Mtot = 0.
-            for a=1:M
-                Mtot += ξ[i, a]* m̂[a]
-            end
-            h[i] = Mtot + m[i] * Ĉtot[k] + r*h[i]
+        m = allm[k]; m̂=allm̂[k]; h=allh[k]; Mt = Mtot[k]
+        @inbounds for i=1:N
+            h[i] = Mt[i] + m[i] * Ctot[k] + r*h[i]
             oldm = m[i]
             m[i] = tanh(h[i])
             Δ = max(Δ, abs(m[i] - oldm))
@@ -208,7 +235,7 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
                                 , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
-        write("it=$it ... ")
+        print("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.r)
         W = getW(mags(g))
         E = energy(g, W)
@@ -260,7 +287,7 @@ function solve(; N::Int=1000, α::Float64=0.6, seed_ξ::Int=-1,
     if seed_ξ > 0
         srand(seed_ξ)
     end
-    M = round(Int, α * K * N)
+    M = round(Int, α * K* N)
     ξ = rand([-1,1], N, M)
     σ = ones(Int, M)
     solve(ξ, σ; K=K, kw...)
@@ -271,12 +298,12 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
                 K::Int=3,
                 r::Float64 = 0., r_step::Float64= 0.001,
                 γ::Float64 = 0., γ_step::Float64=0.,
-                altsolv::Bool = true,
-                altconv::Bool = false,
+                altsolv::Bool = true, altconv::Bool = false,
+                hastopmask::Bool = true,
                 seed::Int = -1)
     @assert K % 2 == 1
     seed > 0 && srand(seed)
-    g = FactorGraphTAP(ξ, σ, K)
+    g = FactorGraphTAP(ξ, σ, K, hastopmask = hastopmask)
     initrand!(g)
 
     # if method == :reinforcement
