@@ -94,6 +94,7 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
             Mhtot += -m̂[a]*Chtot
             Hp = H(-Mhtot / √Chtot); Hm = 1-Hp
             Gp = G(-Mhtot / √Chtot); Gm = Gp
+
             @assert pd[a]*Hp + (1-pd[a])*Hm > 0
             # m̂[a] = 1 / √Ctot * (pd[a]*Gp - (1-pd[a])*Gm) / (pd[a]*Hp + (1-pd[a])*Hm)
             m̂[a] = 1 / √Chtot * (pd[a]*Gp - (1-pd[a])*Gm) / (pd[a]*Hp + (1-pd[a])*Hm)
@@ -267,16 +268,6 @@ end
 energy(g::FactorGraphTAP) = energy(g, getW(mags(g)))
 
 mag(g::FactorGraphTAP, k::Integer, i::Integer) = g.allm[k][i]
-#
-# function mag_noreinf(v::Var)
-#     ispinned(v) && return float(v.pinned)
-#     πp, πm = πpm(v)
-#     πp /= v.ηreinfp
-#     πm /= v.ηreinfm
-#     m = (πp - πm) / (πm + πp)
-#     # @assert isfinite(m)
-#     return m
-# end
 
 mags(g::FactorGraphTAP) = g.allm
 # mags_noreinf(g::FactorGraphTAP) = Float64[mag_noreinf(v) for v in g.vnodes]

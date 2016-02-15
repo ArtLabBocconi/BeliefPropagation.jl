@@ -13,11 +13,11 @@ function GHapp(x)
 end
 GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
 
-type FactorGraphTAP
+type FactorGraphTAP{T}
     N::Int
     M::Int
-    ξ::Matrix
-    ξ2::Matrix
+    ξ::Matrix{T}
+    ξ2::Matrix{T}
     σ::Vector{Int}
     m::Vector{Float64}
     ρ::Vector{Float64}
@@ -28,7 +28,7 @@ type FactorGraphTAP
     Ctot::Vector{Float64}
     h1::Vector{Float64} # for reinforcement
     h2::Vector{Float64} # for reinforcement
-    function FactorGraphTAP(ξ::Matrix, σ::Vector{Int}, λ::Float64=1)
+    function FactorGraphTAP{T}(ξ::Matrix{T}, σ::Vector{Int}, λ::Float64=1)
         N = size(ξ, 1)
         M = length(σ)
         @assert size(ξ, 2) == M
@@ -114,7 +114,7 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
                                 , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
-        write("it=$it ... ")
+        print("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.r)
         E = energy(g)
         Etrunc = energy_trunc(g)
@@ -164,7 +164,7 @@ function solve(; N::Int=1000, α::Float64=0.6, seed_ξ::Int=-1, kw...)
         srand(seed_ξ)
     end
     M = round(Int, α * N)
-    ξ = rand([-1,1], N, M)
+    ξ = rand([-1.,1.], N, M)
     σ = ones(Int, M)
     solve(ξ, σ; kw...)
 end
@@ -177,7 +177,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 seed::Int = -1)
 
     seed > 0 && srand(seed)
-    g = FactorGraphTAP(ξ, σ, λ)
+    g = FactorGraphTAP{Float64}(ξ, σ, λ)
     initrand!(g)
 
     # if method == :reinforcement
