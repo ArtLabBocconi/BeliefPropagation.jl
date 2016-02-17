@@ -128,7 +128,7 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
 
         W = getW(mags(g))
         E = energy(g, W)
-        # print_overlaps(W)
+        print_overlaps(W)
         @printf(" r=%.3f ry=%.3f E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.ry, E, Δ)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
