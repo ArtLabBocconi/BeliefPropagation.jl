@@ -1,5 +1,6 @@
 module Deep
-
+include("../utils/OO.jl")
+import OO.@oo
 using MacroUtils
 using FastGaussQuadrature
 using PyPlot
@@ -93,9 +94,7 @@ function update_reinforcement!(reinfpar::ReinfParams)
     end
 end
 
-function initrand!(g::FactorGraphTAP)
-    @extract g N M L K allm allmh allmy MYtot CYtot Mtot Ctot allh allpu allpd ξ σ
-    println(N, " ", L, " ", M, " ", K)
+@oo function initrand!(g::FactorGraphTAP)
     for l=1:L
         for m in allm[l]
             m[:] = 2*rand(K[l]) - 1
@@ -110,7 +109,6 @@ function initrand!(g::FactorGraphTAP)
             pu[:] = rand(M)
         end
         for pd in allpd[l]
-            # pd[:] = ones(g.M)
             pd[:] = rand(M)
         end
     end
@@ -199,6 +197,7 @@ function updateTopLayerExact(g::FactorGraphTAP)
 
         @inbounds for i = 1:N
             pu  = allpu[i][a]
+
             s0 = Complex128(0.)
             s2p = Complex128(0.)
             s2m = Complex128(0.)
@@ -235,8 +234,8 @@ function updateLayerExact(g::FactorGraphTAP, l::Int)
     expinv0 = fexpinv0(N)
     expinv2p = fexpinv2p(N)
     expinv2m = fexpinv2m(N)
-    expinv2P = Base.@get!(expinv2Ps, N, fexpinv2P(N))
-    expinv2M = Base.@get!(expinv2Ms, N, fexpinv2M(N))
+    expinv2P = fexpinv2P(N)
+    expinv2M = fexpinv2M(N)
     #TODO capire perché è molto più lento facendo così
     # expf = Base.@get!(expfs, N, fexpf(N))
     # expinv0 = Base.@get!(expinv0s, N, fexpinv0(N))
@@ -267,7 +266,6 @@ function updateLayerExact(g::FactorGraphTAP, l::Int)
                     X[p] *= (1-pup) + pup*expf[p]
                 end
             end
-
             s2P = Complex128(0.)
             s2M = Complex128(0.)
             for p=1:N+1
@@ -297,8 +295,8 @@ function updateLayerExact(g::FactorGraphTAP, l::Int)
                 sr > 1 && (sr=1.)
                 sr < -1 && (sr=-1.)
                 @assert isfinite(sr)
-                MYt[i] +=  m[i] * sr
-                Mt[i] +=  my[i] * sr
+                MYt[i] +=  atanh(m[i] * sr)
+                Mt[i] +=  atanh(my[i] * sr)
             end
         end
     end
@@ -322,10 +320,12 @@ function updateLayerApprox(g::FactorGraphTAP, l::Int)
             # Mhtot = dot(sub(ξ,:,a),m)
             Mhtot = 0.
             Chtot = 0.
+            #TODO mettere il termine di reazione
             for i=1:K[l]
                 Mhtot += my[i]*m[i]
                 Chtot += 1 - my[i]^2*m[i]^2
             end
+
             Mhtot += -mh[a]*Chtot
             if Chtot == 0
                 print("x2")
@@ -339,14 +339,7 @@ function updateLayerApprox(g::FactorGraphTAP, l::Int)
                 println("pd[a]*Hp + (1-pd[a])*Hm <= 0")
                 pd[a] = pd[a]<= 0. ? 1e-8 : 1-1e-8
             end
-             mh[a] = 1/√Chtot*(pd[a]*Gp-(1-pd[a])*Gm) / (pd[a]*Hp+(1-pd[a])*Hm)
-
-            # m̂[a] = 1 / √Ctot * (pd[a]*Gp - (1-pd[a])*Gm) / (pd[a]*Hp + (1-pd[a])*Hm)
-            if !isfinite(mh[a])
-                println(Chtot)
-                println(Gp)
-                println(pd[a])
-            end
+            mh[a] = 1/√Chtot*(pd[a]*Gp-(1-pd[a])*Gm) / (pd[a]*Hp+(1-pd[a])*Hm)
             @assert isfinite(mh[a])
 
             c = mh[a] * (Mhtot / Chtot + mh[a])
@@ -368,58 +361,6 @@ function updateLayerApprox(g::FactorGraphTAP, l::Int)
     end
 end
 
-function updateTopLayerApprox(g::FactorGraphTAP)
-    @extract g N M L allm allmh allmy MYtot CYtot Mtot Ctot allh allpu allpd ξ σ
-    pu = allpu[end]
-    pd = allpd[end]
-    K = g.K[end]
-    if K == 1
-        for a=1:M
-            pd[1][a] = (1+σ[a])/2
-        end
-        return
-    end
-
-    for a=1:M
-        Mhtot = 0.
-        Chtot = 0.
-        for i=1:K
-            my = 2pu[i][a]-1
-            Mhtot += my
-            Chtot += 1 - my^2
-        end
-        # @assert Chtot > 0 "Chtot > 0 $Chtot"
-        if Chtot ==0
-            print("x1")
-            Chtot = 1e-8
-        end
-        for i=1:K
-            my = 2pu[i][a]-1
-            Mcav = Mhtot - my
-            Ccav = Chtot- (1 - my^2)
-
-            @assert isfinite(Mcav)
-            @assert isfinite(Ccav)
-            # pp = H(-σ[a]*(Mcav+1) / √Ccav)
-            # pm = H(-σ[a]*(Mcav-1) / √Ccav)
-            # pd[i][a] = pp/(pp+pm)
-            x = σ[a]*Mcav/ √Chtot
-            if abs(x) < 1e5
-                m = 1/ √Ccav*GH(-x)
-            else
-                m = x > 0 ? 1 - 1e-15 : -1 + 1e-15
-            end
-            pd[i][a] = (1+m)/2
-            @assert isfinite(pd[i][a])  "$m $(-σ[a]*Mcav/ √Chtot) $Mcav $Mhtot $Chtot"
-            # @assert isfinite(pd[i][a]) "isfinite(pd[i][a]) $pp $pm $Mcav $Ccav"
-            pd[i][a] < 0 && (pd[i][a]=1e-8)
-            pd[i][a] > 1 && (pd[i][a]=1-1e-8)
-        end
-
-    end
-
-end
-
 function oneBPiter!(g::FactorGraphTAP, r::Float64=0., ry::Float64=0.)
     @extract g N M L K allm allmh allmy MYtot CYtot Mtot Ctot allh  allhy allpu allpd ξ σ
     Δ = 0.
@@ -438,6 +379,10 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0., ry::Float64=0.)
             Mt=Mtot[l][k]; Ct = Ctot[l];
             h=allh[l][k]
             @inbounds for i=1:K[l]
+                # DEBUG
+                # if i==1 && k==1 && l==2
+                #     println("Mt[i]",Mt[i])
+                # end
                 h[i] = Mt[i] + m[i] * Ct[k] + r*h[i]
                 oldm = m[i]
                 m[i] = tanh(h[i])
@@ -473,7 +418,6 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0., ry::Float64=0.)
     end # l=1:L-1
 
     updateTopLayerExact(g)
-    # updateTopLayerApprox(g)
 
     Δ
 end
@@ -504,12 +448,14 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
                                 , altsolv::Bool=false, altconv = false
                                 , reinfpar::ReinfParams=ReinfParams())
 
+    # println("m=$(g.allm[1])")
     for it=1:maxiters
         print("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.r, reinfpar.ry)
+
         W = getW(mags(g))
         E = energy(g, W)
-        print_overlaps(W, meanvar=true)
+        # print_overlaps(W, meanvar=true)
         @printf(" r=%.3f ry=%.3f E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.ry, E, Δ)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
@@ -531,7 +477,6 @@ function energy{T}(g::FactorGraphTAP, W::Vector{Vector{Vector{T}}})
         σks = ξ[:,a]
         for l=1:L
             σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
-            # println(σks)
         end
         E += σ[a] * sum(σks) > 0 ? 0 : 1
     end
