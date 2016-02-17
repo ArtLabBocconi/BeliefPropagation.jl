@@ -380,8 +380,8 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0., ry::Float64=0.)
             h=allh[l][k]
             @inbounds for i=1:K[l]
                 # DEBUG
-                # if i==1 && k==1 && l==2
-                #     println("Mt[i]",Mt[i])
+                # if i==1 && k==1
+                #     println("l=$(l+1) Mtot[k=1][i=1:10] = ",Mt[1:min(end,10)])
                 # end
                 h[i] = Mt[i] + m[i] * Ct[k] + r*h[i]
                 oldm = m[i]

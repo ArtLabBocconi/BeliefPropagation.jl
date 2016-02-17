@@ -102,38 +102,76 @@ end
 getW(mags::VecVecVec) = [[Float64[1-2signbit(m) for m in magk]
                         for magk in magsl] for magsl in mags]
 
-function print_overlaps{T}(W::Vector{Vector{Vector{T}}})
-    K = map(length, W)
-    L = length(K)
+function plot_info(g::FactorGraph, info=1)
+    m = mags(g)
+    W = getW(m)
+    K = g.K
+    L = length(K)-1
     N = length(W[1][1])
-    allq = [ Vec() for l=1:L]
+    layers = g.layers[2:end-1]
+    width = info
     clf()
     for l=1:L
-        q = allq[l]
-        norm = l > 1? K[l-1] : N
-        for k=1:K[l]
-            for p=k+1:K[l]
-                push!(q, dot(W[l][k],W[l][p])/norm)
+        subplot(L,width,width*(L-l)+1)
+        title("W Overlaps Layer $l")
+        xlim(-1.01,1.01)
+        q = Float64[]
+        for k=1:K[l+1]
+            for p=k+1:K[l+1]
+                push!(q, dot(W[l][k],W[l][p])/K[l])
             end
         end
-        subplot(L*100 + 1*10 + L-l+1)
-        xlim(-1,1)
         plt[:hist](q)
+        info == 1 && continue
+
+        subplot(L,width,width*(L-l)+2)
+        title("Mags Layer $l")
+        xlim(-1.01,1.01)
+        plt[:hist](vcat(m[l]...))
+        info == 2 && continue
+
+        subplot(L,width,width*(L-l)+3)
+        title("Fact Satisfaction Layer $l")
+        xlim(-1.01,1.01)
+        for k=1:K[l+1]
+            pu = layers[l].allpu[k]
+            pd = layers[l].top_allpd[k]
+            sat = (2pu-1) .* (2pd-1)
+            plt[:hist](sat)
+        end
+        info == 3 && continue
+
+        subplot(L,width,width*(L-l)+4)
+        title("Mag UP From Layer $l")
+        xlim(-1.01,1.01)
+        for k=1:K[l+1]
+            pu = layers[l].allpu[k]
+            plt[:hist](2pu-1)
+        end
+        info == 4 && continue
+
+
+        subplot(L,width,width*(L-l)+5)
+        title("Mag DOWN To Layer $l")
+        xlim(-1.01,1.01)
+        for k=1:K[l+1]
+            pd = layers[l].top_allpd[k]
+            plt[:hist](2pd-1)
+        end
+        info == 5 && continue
+
     end
 end
 
 function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
-                                , altsolv::Bool=false, altconv = false
+                                , altsolv::Bool=false, altconv = false, plotinfo=-1
                                 , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
-        print("it=$it ... ")
         Δ = update!(g, reinfpar.r, reinfpar.ry)
-
-        W = getW(mags(g))
-        E = energy(g, W)
-        print_overlaps(W)
-        @printf(" r=%.3f ry=%.3f E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.ry, E, Δ)
+        E = energy(g)
+        @printf("it=%d  r=%.3f ry=%.3f E=%d   \tΔ=%f \n", it, reinfpar.r, reinfpar.ry, E, Δ)
+        plotinfo > 0  && plot_info(g, plotinfo)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
             println("Found Solution!")
@@ -179,17 +217,16 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 r::Float64 = 0., r_step::Float64= 0.001,
                 ry::Float64 = 0., ry_step::Float64= 0.0,
                 altsolv::Bool = true, altconv::Bool = false,
-                seed::Int = -1)
+                seed::Int = -1, plotinfo=-1)
     for l=1:length(K)
         @assert K[l] % 2 == 1
     end
     seed > 0 && srand(seed)
     g = FactorGraph(ξ, σ, K, layers)
     initrand!(g)
-    # if method == :reinforcement
     reinfpar = ReinfParams(r, r_step, ry, ry_step)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar,
-            altsolv=altsolv, altconv=altconv)
+            altsolv=altsolv, altconv=altconv, plotinfo=plotinfo)
     return getW(mags(g))
 end
 

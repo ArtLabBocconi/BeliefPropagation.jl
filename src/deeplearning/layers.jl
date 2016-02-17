@@ -45,8 +45,181 @@ initrand!(layer::InputLayer) = nothing
 
 
 ###########################
+#       MAX SUM LAYER
+#######################################
+# NOTE le m in realtà sono tutte dei campi
+type MaxSumLayer <: AbstractLayer
+    l::Int
+    K::Int
+    N::Int
+    M::Int
+
+    allm::VecVec
+    allmy::VecVec
+    allmh::VecVec
+
+    allmcav::VecVecVec
+    allmycav::VecVecVec
+    allmhcavtoy::VecVecVec
+    allmhcavtow::VecVecVec
+
+    allh::VecVec # for W reinforcement
+    allhy::VecVec # for Y reinforcement
+
+    allpu::VecVec
+    allpd::VecVec
+
+    top_allpd::VecVec
+    bottom_allpu::VecVec
+
+    istoplayer::Bool
+end
+
+function MaxSumLayer(K::Int, N::Int, M::Int)
+    # for variables W
+    allm = [zeros(N) for i=1:K]
+    allh = [zeros(N) for i=1:K]
+
+
+    allmcav = [[zeros(N) for i=1:M] for i=1:K]
+    allmycav = [[zeros(N) for i=1:K] for i=1:M]
+    allmhcavtoy = [[zeros(K) for i=1:N] for i=1:M]
+    allmhcavtow = [[zeros(M) for i=1:N] for i=1:K]
+    # for variables Y
+    allmy = [zeros(N) for a=1:M]
+    allhy = [zeros(N) for a=1:M]
+
+    # for Facts
+    allmh = [zeros(M) for k=1:K]
+
+    allpu = [zeros(M) for k=1:K]
+    allpd = [zeros(M) for k=1:N]
+
+    istoplayer = K == 1
+
+    return MaxSumLayer(-1, K, N, M, allm, allmy, allmh
+        , allmcav, allmycav, allmhcavtoy,allmhcavtow
+        , allh, allhy, allpu,allpd
+        , VecVec(), VecVec()
+        , istoplayer)
+end
+
+
+function updateVarW!{L <: Union{MaxSumLayer}}(layer::L, k::Int, r::Float64=0.)
+    @extract layer K N M allm allmy allmh allpu allpd allhy
+    @extract layer bottom_allpu top_allpd istoplayer
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+
+    m = allm[k]
+    h = allh[k]
+    Δ = 0.
+    for i=1:N
+        mhw = allmhcavtow[k][i]
+        mcav = allmcav[k]
+        h[i] = sum(mhw) + r*h[i]
+        oldm = m[i]
+        m[i] = h[i]
+        for a=1:M
+            mcav[a][i] = h[i]-mhw[a]
+        end
+        Δ = max(Δ, abs(m[i] - oldm))
+    end
+    return Δ
+end
+
+function updateVarY!{L <: Union{MaxSumLayer}}(layer::L, a::Int, ry::Float64=0.)
+    @extract layer K N M allm allmy allmh allpu allpd allhy
+    @extract layer bottom_allpu top_allpd istoplayer
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+
+    my = allmy[a]
+    hy = allhy[a]
+    for i=1:N
+        mhy = allmhcavtoy[a][i]
+        mycav = allmycav[a]
+        pu = bottom_allpu[i][a];
+
+        hy[i] = sum(mhy) + ry* hy[i]
+        @assert isfinite(hy[i])
+        allpd[i][a] = hy[i]
+        # pinned from below (e.g. from input layer)
+        hy[i] += pu
+        my[i] = hy[i]
+        for k=1:K
+            mycav[k][i] = hy[i]-mhy[k]
+        end
+    end
+end
+
+
+function updateFact!(layer::MaxSumLayer, k::Int)
+    @extract layer K N M allm allmy allmh allpu allpd
+    @extract layer bottom_allpu top_allpd istoplayer
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+    mh = allmh[k];
+    pdtop = top_allpd[k];
+    pubot = bottom_allpu;
+    for a=1:M
+        mycav = allmycav[a][k]
+        mcav = allmcav[k][a]
+        mhw = allmhcavtow[k]
+        mhy = allmhcavtoy[a]
+
+        X = ones(Complex128, N+1)
+        for p=1:N+1
+            for i=1:N
+                pup = (1+mcav[i]*mycav[i])/2
+                X[p] *= (1-pup) + pup*expf[p]
+            end
+        end
+
+        vH = 2pdtop[a]-1
+        if !istoplayer > 0
+            s2P = Complex128(0.)
+            s2M = Complex128(0.)
+            for p=1:N+1
+                s2P += expinv2P[p] * X[p]
+                s2M += expinv2M[p] * X[p]
+            end
+            mUp = real(s2P - s2M) / real(s2P + s2M)
+            @assert isfinite(mUp)
+            allpu[k][a] = (1+mUp)/2
+            mh[a] = real((1+vH)*s2P - (1-vH)*s2M) / real((1+vH)+s2P + (1-vH)*s2M)
+        end
+
+        for i = 1:N
+            pup = (1+mcav[i]*mycav[i])/2
+            s0 = Complex128(0.)
+            s2p = Complex128(0.)
+            s2m = Complex128(0.)
+            for p=1:N+1
+                xp = X[p] / (1-pup + pup*expf[p])
+                s0 += expinv0[p] * xp
+                s2p += expinv2p[p] * xp
+                s2m += expinv2m[p] * xp
+            end
+            pp = (1+vH)/2; pm = 1-pp
+            sr = vH * real(s0 / (pp*(s0 + 2s2p) + pm*(s0 + 2s2m)))
+            sr > 1 && (sr=1.)
+            sr < -1 && (sr=-1.)
+
+            mhw[i][a] =  atanh(mycav[i] * sr)
+            mhy[i][k] =  atanh(mcav[i] * sr)
+            @assert isfinite(mycav[i])
+            @assert isfinite(allpd[i][a])
+            @assert isfinite(sr)
+        end
+    end
+end
+
+
+###########################
 #       BP EXACT LAYER
 #######################################
+#TODO Layer not working
 type BPExactLayer <: AbstractLayer
     l::Int
     K::Int
@@ -243,6 +416,35 @@ function updateVarY!{L <: Union{BPExactLayer}}(layer::L, a::Int, ry::Float64=0.)
     end
 end
 
+function initrand!{L <: Union{BPExactLayer}}(layer::L)
+    @extract layer K N M allm allmy allmh allpu allpd  top_allpd
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+    for m in allm
+        m[:] = 2*rand(N) - 1
+    end
+    for my in allmy
+        my[:] = 2*rand(N) - 1
+    end
+    for mh in allmh
+        mh[:] = 2*rand(M) - 1
+    end
+    for pu in allpu
+        pu[:] = rand(M)
+    end
+    for pd in top_allpd
+        pd[:] = rand(M)
+    end
+
+    for k=1:K,a=1:M,i=1:N
+        allmcav[k][a][i] = allm[k][i]
+        allmycav[a][k][i] = allmy[a][i]
+        allmhcavtow[k][i][a] = allmh[k][a]*allmy[a][i]
+        allmhcavtoy[a][i][k] = allmh[k][a]*allm[k][i]
+    end
+
+end
+
 ###########################
 #       TAP EXACT LAYER
 #######################################
@@ -379,7 +581,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
         end
 
         vH = 2pdtop[a]-1
-        if !istoplayer
+        # if !istoplayer
             s2P = Complex128(0.)
             s2M = Complex128(0.)
             for p=1:N+1
@@ -390,7 +592,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
             @assert isfinite(mUp)
             allpu[k][a] = (1+mUp)/2
             mh[a] = real((1+vH)*s2P - (1-vH)*s2M) / real((1+vH)+s2P + (1-vH)*s2M)
-        end
+        # end
 
 
         for i = 1:N
@@ -547,7 +749,7 @@ function updateFact!(layer::TapLayer, k::Int)
 end
 
 function updateVarW!{L <: Union{TapLayer,TapExactLayer}}(layer::L, k::Int, r::Float64=0.)
-    @extract layer K N M allm allmy allmh allpu allpd
+    @extract layer K N M allm allmy allmh allpu allpd l
     @extract layer CYtot MYtot Mtot Ctot bottom_allpu allh
     Δ = 0.
     m=allm[k];
@@ -555,9 +757,9 @@ function updateVarW!{L <: Union{TapLayer,TapExactLayer}}(layer::L, k::Int, r::Fl
     h=allh[k]
     for i=1:N
         # DEBUG
-        if i==1 && k==1 && layer.l==3
-            println("Mt[i]",Mt[i])
-        end
+        # if i==1 && k==1
+        #     println("l=$l Mtot[k=1][i=1:10] = ",Mt[1:min(end,10)])
+        # end
         h[i] = Mt[i] + m[i] * Ct[k] + r*h[i]
         oldm = m[i]
         m[i] = tanh(h[i])
@@ -641,7 +843,7 @@ function update!{L <: Union{TapLayer,TapExactLayer}}(layer::L, r::Float64, ry::F
     return Δ
 end
 
-function initrand!{L <: Union{BPExactLayer, TapExactLayer,TapLayer}}(layer::L)
+function initrand!{L <: Union{TapExactLayer,TapLayer}}(layer::L)
     @extract layer K N M allm allmy allmh allpu allpd  top_allpd
     for m in allm
         m[:] = 2*rand(N) - 1
@@ -674,7 +876,7 @@ function chain!(lay1::AbstractLayer, lay2::OutputLayer)
     lay2.l = lay1.l+1
 end
 
-function chain!{L <: Union{TapExactLayer,TapLayer}}(lay1::InputLayer, lay2::L)
+function chain!{L <: Union{BPExactLayer, TapExactLayer,TapLayer}}(lay1::InputLayer, lay2::L)
     lay2.l = lay1.l+1
     lay2.bottom_allpu = lay1.allpu
     for a=1:lay2.M
