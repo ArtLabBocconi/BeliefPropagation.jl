@@ -143,6 +143,8 @@ function updateFact!(layer::BPExactLayer, k::Int)
                 X[p] *= (1-pup) + pup*expf[p]
             end
         end
+
+        vH = 2pdtop[a]-1
         if !istoplayer > 0
             s2P = Complex128(0.)
             s2M = Complex128(0.)
@@ -153,10 +155,8 @@ function updateFact!(layer::BPExactLayer, k::Int)
             mUp = real(s2P - s2M) / real(s2P + s2M)
             @assert isfinite(mUp)
             allpu[k][a] = (1+mUp)/2
+            mh[a] = real((1+vH)*s2P - (1-vH)*s2M) / real((1+vH)+s2P + (1-vH)*s2M)
         end
-
-        vH = 2pdtop[a]-1
-        mh[a] = real((1+vH)*s2P - (1-vH)*s2M) / real((1+vH)+s2P + (1-vH)*s2M)
 
         for i = 1:N
             pup = (1+mcav[i]*mycav[i])/2
@@ -513,7 +513,9 @@ function updateFact!(layer::TapLayer, k::Int)
         Hp = H(-Mhtot / √Chtot); Hm = 1-Hp
         Gp = G(-Mhtot / √Chtot); Gm = Gp
         # @assert isfinite(pd[a]) "$(pd)"
-        @assert pd[a]*Hp + (1-pd[a])*Hm > 0
+        if pd[a]*Hp + (1-pd[a])*Hm <= 0.
+            pd[a] -= 1e-8
+        end
         mh[a] = 1/√Chtot*(pd[a]*Gp - (1-pd[a])*Gm) / (pd[a]*Hp + (1-pd[a])*Hm)
         if !isfinite(mh[a])
             println(Chtot)
@@ -553,9 +555,9 @@ function updateVarW!{L <: Union{TapLayer,TapExactLayer}}(layer::L, k::Int, r::Fl
     h=allh[k]
     for i=1:N
         # DEBUG
-        # if i==1 && k==1 && layer.l==3
-        #     println("Mt[i]",Mt[i])
-        # end
+        if i==1 && k==1 && layer.l==3
+            println("Mt[i]",Mt[i])
+        end
         h[i] = Mt[i] + m[i] * Ct[k] + r*h[i]
         oldm = m[i]
         m[i] = tanh(h[i])

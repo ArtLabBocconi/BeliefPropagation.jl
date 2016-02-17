@@ -54,6 +54,10 @@ type FactorGraph
             chain!(layers[l], layers[l+1])
         end
 
+        if L==1
+            layers[2].istoplayer = false
+        end
+
         new(K, M, L, ξ, σ, layers)
     end
 end
@@ -143,12 +147,12 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
 end
 
 function energy{T}(g::FactorGraph, W::Vector{Vector{Vector{T}}})
-    @extract g M K L σ ξ
+    @extract g M K σ ξ
+    L=length(W)
     E = 0
-    @assert length(W) == L-1
     for a=1:M
         σks = ξ[:,a]
-        for l=1:L-1
+        for l=1:L
             σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
         end
         E += σ[a] * sum(σks) > 0 ? 0 : 1
@@ -158,11 +162,12 @@ end
 
 energy(g::FactorGraph) = energy(g, getW(mags(g)))
 
-mags(g::FactorGraph) = [(lay.allm)::VecVec for lay in g.layers[2:end-2]]
+mags(g::FactorGraph) = [(lay.allm)::VecVec for lay in g.layers[2:end-1]]
+
 function solve(; K::Vector{Int} = [101,3], α::Float64=0.6
             , seed_ξ::Int=-1, kw...)
     seed_ξ > 0 && srand(seed_ξ)
-    num = sum(l->K[l]*K[l+1],1:length(K)-2)
+    num = length(K)==2 ? K[1]*K[2]  : sum(l->K[l]*K[l+1],1:length(K)-2)
     M = round(Int, α * num)
     ξ = rand([-1.,1.], K[1], M)
     σ = ones(Int, M)
