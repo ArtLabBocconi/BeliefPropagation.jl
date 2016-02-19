@@ -159,10 +159,12 @@ function updateVarY!{L <: Union{MaxSumLayer}}(layer::L, a::Int, ry::Float64=0.)
 
         hy[i] = sum(mhy) + ry* hy[i]
         # isfinite(hy[i])
-        allpd[i][a] = hy[i]
+        allpd[i][a] = (1+tanh(βms*hy[i]))/2
         # pinned from below (e.g. from input layer)
         hy[i] += atanh(2pu-1)/βms
         !isfinite(hy[i]) && (hy[i] = sign(hy[i]) * ∞ )
+        hy[i] = round(Int, hy[i])
+        hy[i] += hy[i] == 0 ? rand([-1,1]) : 0
         my[i] = hy[i]
         for k=1:K
             mycav[k][i] = hy[i]-mhy[k]
@@ -191,7 +193,8 @@ function updateFact!(layer::MaxSumLayer, k::Int)
         mhy = allmhcavtoy[a]
         ϕy = atanh(2pdtop[a]-1) / βms
         !isfinite(ϕy) && (ϕy = sign(ϕy) * ∞)
-
+        ϕy = round(Int, ϕy)
+        ϕy == 0 && (ϕy += pdtop[a] > 0.5 ? 1 : -1)
         for i=1:N
             ϕ[i] = 0.5*(abs(mcav[i] + mycav[i])-abs(mcav[i] - mycav[i]))
         end
@@ -951,6 +954,7 @@ function updateVarW!{L <: Union{TapLayer,TapExactLayer}}(layer::L, k::Int, r::Fl
         # if i==1 && k==1
         #     println("l=$l Mtot[k=1][i=1:10] = ",Mt[1:min(end,10)])
         # end
+        i==1 && println("h $(h[i]) r $r") 
         h[i] = Mt[i] + m[i] * Ct[k] + r*h[i]
         oldm = m[i]
         m[i] = tanh(h[i])
