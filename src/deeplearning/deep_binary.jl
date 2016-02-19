@@ -88,7 +88,7 @@ function initrand!(g::FactorGraph)
         initrand!(lay)
     end
     if g.L == 1
-        initrand!(layers[2])
+        initrand!(layers[end-1])
     else
         g.layers[end-1].allm[1][:] = 1
     end

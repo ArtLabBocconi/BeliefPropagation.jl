@@ -954,7 +954,7 @@ function updateVarW!{L <: Union{TapLayer,TapExactLayer}}(layer::L, k::Int, r::Fl
         # if i==1 && k==1
         #     println("l=$l Mtot[k=1][i=1:10] = ",Mt[1:min(end,10)])
         # end
-        i==1 && println("h $(h[i]) r $r") 
+        # i==1 && println("h $(h[i]) r $r")
         h[i] = Mt[i] + m[i] * Ct[k] + r*h[i]
         oldm = m[i]
         m[i] = tanh(h[i])
@@ -1052,7 +1052,7 @@ function initrand!{L <: Union{TapExactLayer,TapLayer}}(layer::L)
     for pu in allpu
         pu[:] = rand(M)
     end
-    for pd in top_allpd
+    for pd in allpd
         pd[:] = rand(M)
     end
 
