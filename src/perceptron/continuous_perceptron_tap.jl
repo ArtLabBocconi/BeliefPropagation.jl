@@ -67,16 +67,19 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
 
     Mtot[:] = 0
     Ctot[:] = 0
+    Δh = 0
     for a in 1:M
         Chtot = dot(ξ2[:,a], ρ)
         Mhtot = dot(ξ[:,a], m)
         Mhtot += -mh[a]*Chtot
         x = σ[a]*Mhtot / sqrt(Chtot)
         gh = GH(-x)
+        oldm = mh[a]
         mh[a] = σ[a]/ sqrt(Chtot) * gh
         ρh[a] = 1/Chtot *(x*gh + gh^2)
         Mtot[:] += ξ[:, a] * mh[a]
         Ctot[:] += ξ2[:, a] * ρh[a]
+        Δh = max(Δh, abs(mh[a] - oldm))
     end
 
     Δ = 0.
@@ -90,7 +93,7 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
         Δ = max(Δ, abs(m[i] - oldm))
     end
 
-    Δ
+    Δ, Δh
 end
 
 function update_reinforcement!(reinfpar::ReinfParams)
@@ -115,10 +118,11 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
 
     for it=1:maxiters
         print("it=$it ... ")
-        Δ = oneBPiter!(g, reinfpar.r)
+        Δ, Δh = oneBPiter!(g, reinfpar.r)
         E = energy(g)
         Etrunc = energy_trunc(g)
-        @printf("r=%.3f γ=%.3f  E(W=mags)=%d E(trunc W)=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Etrunc, Δ)
+        @printf("r=%.3f γ=%.3f  E(W=mags)=%d E(trunc W)=%d   \t
+            Δ=%f Δh=%f\n", reinfpar.r, reinfpar.γ, E, Etrunc, Δ, Δh)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
             println("Found Solution!")
@@ -144,19 +148,8 @@ energy(g::FactorGraphTAP) = energy(g, mags(g))
 energy_trunc(g::FactorGraphTAP) = energy(g, getW(mags(g)))
 
 mag(g::FactorGraphTAP, i::Integer) = g.m[i]
-#
-# function mag_noreinf(v::Var)
-#     ispinned(v) && return float(v.pinned)
-#     πp, πm = πpm(v)
-#     πp /= v.ηreinfp
-#     πm /= v.ηreinfm
-#     m = (πp - πm) / (πm + πp)
-#     # @assert isfinite(m)
-#     return m
-# end
 
 mags(g::FactorGraphTAP) = g.m
-# mags_noreinf(g::FactorGraphTAP) = Float64[mag_noreinf(v) for v in g.vnodes]
 
 
 function solve(; N::Int=1000, α::Float64=0.6, seed_ξ::Int=-1, kw...)

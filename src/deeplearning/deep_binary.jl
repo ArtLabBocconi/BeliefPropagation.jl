@@ -22,7 +22,7 @@ type FactorGraph
     layers::Vector{AbstractLayer}
 
     function FactorGraph(ξ::Matrix{Float64}, σ::Vector{Int}
-                , K::Vector{Int}, layertype::Vector{Symbol})
+                , K::Vector{Int}, layertype::Vector{Symbol}; βms = 1.,rms =1.)
         N, M = size(ξ)
         @assert length(σ) == M
         println("# N=$N M=$M α=$(M/N)")
@@ -42,6 +42,9 @@ type FactorGraph
             elseif  layertype[l] == :bpex
                 push!(layers, BPExactLayer(K[l+1], K[l], M))
                 println("Created BPExactLayer")
+            elseif  layertype[l] == :ms
+                push!(layers, MaxSumLayer(K[l+1], K[l], M, βms=βms, rms=rms))
+                println("Created MaxSumLayer")
             else
                 error("Wrong Layer Symbol")
             end
@@ -84,10 +87,14 @@ function initrand!(g::FactorGraph)
     for lay in layers[2:end-2]
         initrand!(lay)
     end
+    if g.L == 1
+        initrand!(layers[2])
+    else
+        g.layers[end-1].allm[1][:] = 1
+    end
     for a=1:M
         layers[2].allmy[a][:] = ξ[:,a]
     end
-    g.layers[end-1].allm[1][:] = 1
 end
 
 function update!(g::FactorGraph, r::Float64, ry::Float64)
@@ -169,8 +176,9 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
 
     for it=1:maxiters
         Δ = update!(g, reinfpar.r, reinfpar.ry)
-        E = energy(g)
+        E, h = energy(g)
         @printf("it=%d  r=%.3f ry=%.3f E=%d   \tΔ=%f \n", it, reinfpar.r, reinfpar.ry, E, Δ)
+        # println(h)
         plotinfo > 0  && plot_info(g, plotinfo)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
@@ -188,14 +196,16 @@ function energy{T}(g::FactorGraph, W::Vector{Vector{Vector{T}}})
     @extract g M K σ ξ
     L=length(W)
     E = 0
+    h = zeros(M)
     for a=1:M
         σks = ξ[:,a]
         for l=1:L
+            l==L &&(h[a] = dot(σks, W[L][1]))
             σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
         end
         E += σ[a] * sum(σks) > 0 ? 0 : 1
     end
-    E
+    E, h
 end
 
 energy(g::FactorGraph) = energy(g, getW(mags(g)))
@@ -217,12 +227,13 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 r::Float64 = 0., r_step::Float64= 0.001,
                 ry::Float64 = 0., ry_step::Float64= 0.0,
                 altsolv::Bool = true, altconv::Bool = false,
-                seed::Int = -1, plotinfo=-1)
+                seed::Int = -1, plotinfo=-1,
+                βms = 1., rms = 1.)
     for l=1:length(K)
         @assert K[l] % 2 == 1
     end
     seed > 0 && srand(seed)
-    g = FactorGraph(ξ, σ, K, layers)
+    g = FactorGraph(ξ, σ, K, layers, βms = βms, rms = rms)
     initrand!(g)
     reinfpar = ReinfParams(r, r_step, ry, ry_step)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar,

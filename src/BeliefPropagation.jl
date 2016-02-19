@@ -11,7 +11,7 @@ Base.show(io::IO, p::Ptr) = show(io, p[])
 Base.show(p::Ptr) = show(p[])
 
 module KSATBP
-    include("ksat_bp.jl")
+    include("ksat/ksat_bp.jl")
 end
 
 module Ising
@@ -26,7 +26,8 @@ module PerceptronBP
 end
 
 module PerceptronTAP
-    include("perceptron/perceptron_tap.jl")
+    # include("perceptron/perceptron_tap.jl")
+    include("perceptron/continuous_perceptron_tap.jl")
 end
 
 module PerceptronEdTAP
