@@ -41,6 +41,6 @@ TAP + reinforcement to solve binary perceptron.
 W = PerceptronTAP.solve(N=1001,α=0.7, r=0.4, r_step=0.001, maxiters=1000);
 ```
 ### EdTAP + Reinforcement
-Work In Progress : Entopy driven TAP for binary perceptron.
+Work In Progress : Entropy driven TAP for binary perceptron.
 ```julia
 W = PerceptronTAP.solve(N=1001,α=0.7, γ=0.4, y=4., maxiters=1000);

@@ -57,10 +57,6 @@ type FactorGraph
             chain!(layers[l], layers[l+1])
         end
 
-        if L==1
-            layers[2].istoplayer = false
-        end
-
         new(K, M, L, ξ, σ, layers)
     end
 end

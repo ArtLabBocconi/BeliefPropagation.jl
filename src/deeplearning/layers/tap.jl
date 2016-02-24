@@ -33,7 +33,8 @@ type TapExactLayer <: AbstractLayer
     expinv2P::CVec
     expinv2M::CVec
 
-    istoplayer::Bool
+    top_layer::AbstractLayer
+    bottom_layer::AbstractLayer
 end
 
 function TapExactLayer(K::Int, N::Int, M::Int)
@@ -63,12 +64,10 @@ function TapExactLayer(K::Int, N::Int, M::Int)
     expinv2P = fexpinv2P(N)
     expinv2M = fexpinv2M(N)
 
-    istoplayer = K == 1
-
     return TapExactLayer(-1, K, N, M, allm, allmy, allmh, allh, allhy, allpu,allpd
         , Mtot, Ctot, MYtot, CYtot, VecVec(), VecVec()
         , fexpf(N), fexpinv0(N), fexpinv2p(N), fexpinv2m(N), fexpinv2P(N), fexpinv2M(N)
-        , istoplayer)
+        , DummyLayer(), DummyLayer())
 end
 
 
@@ -101,7 +100,7 @@ fexpinv2M(N) = Complex128[(
 function updateFact!(layer::TapExactLayer, k::Int)
     @extract layer K N M allm allmy allmh allpu allpd
     @extract layer CYtot MYtot Mtot Ctot
-    @extract layer bottom_allpu top_allpd istoplayer
+    @extract layer bottom_allpu top_allpd
     @extract layer expf expinv0 expinv2M expinv2P expinv2m expinv2p
     m = allm[k]; mh = allmh[k];
     Mt = Mtot[k]; Ct = Ctot;
@@ -112,7 +111,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
         my = allmy[a]
         MYt = MYtot[a];
         X = ones(Complex128, N+1)
-        if istoplayer
+        if istoplayer(layer)
             for p=1:N+1
                 for i=1:N
                     #TODO il termine di reazione si può anche omettere
@@ -135,7 +134,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
         end
 
         vH = 2pdtop[a]-1
-        # if !istoplayer
+        # if !istoplayer(layer)
             s2P = Complex128(0.)
             s2M = Complex128(0.)
             for p=1:N+1
@@ -152,7 +151,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
         for i = 1:N
             # magY = istoplayer ? 2pubot[i][a]-1 : my[i]-mh[a]*m[i]*(1-my[i]^2)
             # magW = m[i]-mh[a]*my[i]*(1-m[i]^2)
-            magY = istoplayer ? 2pubot[i][a]-1 : my[i]
+            magY = istoplayer(layer) ? 2pubot[i][a]-1 : my[i]
             magW = m[i]
             pup = (1+magY*magW)/2
 
@@ -169,7 +168,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
             sr = vH * real(s0 / (pp*(s0 + 2s2p) + pm*(s0 + 2s2m)))
             sr > 1 && (sr=1.)
             sr < -1 && (sr=-1.)
-            if istoplayer
+            if istoplayer(layer)
                 allpd[i][a] = (1 + (m[i] * sr))/2
             else
                 MYt[i] +=  atanh(m[i] * sr)
@@ -213,7 +212,8 @@ type TapLayer <: AbstractLayer
     top_allpd::VecVec
     bottom_allpu::VecVec
 
-    istoplayer::Bool
+    top_layer::AbstractLayer
+    bottom_layer::AbstractLayer
 end
 
 function TapLayer(K::Int, N::Int, M::Int)
@@ -235,11 +235,9 @@ function TapLayer(K::Int, N::Int, M::Int)
     allpu = [zeros(M) for k=1:K]
     allpd = [zeros(M) for k=1:N]
 
-    istoplayer = K == 1
-
     return TapLayer(-1, K, N, M, allm, allmy, allmh, allh, allhy, allpu,allpd
         , Mtot, Ctot, MYtot, CYtot, VecVec(), VecVec()
-        , istoplayer)
+        , DummyLayer(), DummyLayer())
 end
 
 function updateFact!(layer::TapLayer, k::Int)
@@ -368,7 +366,7 @@ function update!(layer::BPExactLayer, r::Float64, ry::Float64)
 end
 
 function update!{L <: Union{TapLayer,TapExactLayer}}(layer::L, r::Float64, ry::Float64)
-    @extract layer K N M allm allmy allmh allpu allpd CYtot MYtot Mtot Ctot istoplayer
+    @extract layer K N M allm allmy allmh allpu allpd CYtot MYtot Mtot Ctot
 
 
     #### Reset Total Fields
@@ -385,12 +383,15 @@ function update!{L <: Union{TapLayer,TapExactLayer}}(layer::L, r::Float64, ry::F
         updateFact!(layer, k)
     end
     Δ = 0.
-    if !istoplayer
+    if !istoplayer(layer) || (istoplayer(layer) && isbottomlayer(layer))
         for k=1:K
             δ = updateVarW!(layer, k, r)
             Δ = max(δ, Δ)
         end
+    end
 
+    # bypass Y if toplayer
+    if !istoplayer(layer) && !isbottomlayer(layer)
         for a=1:M
             updateVarY!(layer, a, ry)
         end
