@@ -21,28 +21,11 @@ module Ising
     include("ising/learning_hopfield.jl")
 end
 
-module PerceptronBP
-    include("perceptron/perceptron_bp.jl")
-end
-
-module PerceptronTAP
-    # include("perceptron/perceptron_tap.jl")
-    include("perceptron/continuous_perceptron_tap.jl")
-end
-
 module PerceptronEdTAP
     include("perceptron/perceptron_edtap.jl")
 end
 
-module CommitteeBP
-    #Work In Progress
-    include("deeplearning/committee_bp.jl")
-end
-
-module CommitteeTAP
-    include("deeplearning/committee_tap.jl")
-end
-
+include("deeplearning/deep_binary.jl")
 
 
 end # module

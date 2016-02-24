@@ -1,3 +1,4 @@
+module BP
 using MacroUtils
 using FastGaussQuadrature
 
@@ -100,7 +101,7 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
                                 , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
-        write("it=$it ... ")
+        print("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.r)
         E = energy(g)
         @printf("r=%.3f γ=%.3f  E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Δ)
@@ -169,3 +170,5 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, altsolv=altsolv)
     return getW(mags(g))
 end
+
+end #BP

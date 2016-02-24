@@ -1,4 +1,4 @@
-module Deep
+module DeepBinary
 
 using MacroUtils
 using FastGaussQuadrature
@@ -200,7 +200,7 @@ function energy{T}(g::FactorGraph, W::Vector{Vector{Vector{T}}})
     for a=1:M
         σks = ξ[:,a]
         for l=1:L
-            l==L &&(h[a] = dot(σks, W[L][1]))
+            l==L && (h[a] = dot(σks, W[L][1]))
             σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
         end
         E += σ[a] * sum(σks) > 0 ? 0 : 1

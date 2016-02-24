@@ -166,7 +166,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 method = :reinforcement, #[:reinforcement, :decimation]
                 r::Float64 = 0., r_step::Float64= 0.001,
                 λ::Float64 = 1., # L2 regularizer
-                altsolv::Bool = true,
+                altsolv::Bool = true,altconv=false,
                 seed::Int = -1)
 
     seed > 0 && srand(seed)
@@ -175,6 +175,6 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
 
     # if method == :reinforcement
     reinfpar = ReinfParams(r, r_step, 0. , 0.)
-    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, altsolv=altsolv)
+    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, altsolv=altsolv,altconv=altconv)
     return mags(g)
 end

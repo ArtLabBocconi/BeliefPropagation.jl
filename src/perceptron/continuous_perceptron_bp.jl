@@ -194,11 +194,12 @@ end
 
 getW(mags::Vector) = Int[1-2signbit(m) for m in mags]
 
-function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5, altsolv::Bool=false
+function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
+                                , altsolv::Bool=false, altconv = true
                                  , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
-        write("it=$it ... ")
+        print("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.r)
         E = energy(g)
         Etrunc = energy_trunc(g)
@@ -208,7 +209,7 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5, alts
             println("Found Solution!")
             break
         end
-        if Δ < ϵ
+        if altconv && Δ < ϵ
             println("Converged!")
             break
         end
@@ -247,9 +248,7 @@ mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
 
 
 function solve(; N::Int=1000, α::Float64=0.6, seed_ξ::Int=-1, kw...)
-    if seed_ξ > 0
-        srand(seed_ξ)
-    end
+    seed_ξ > 0 && srand(seed_ξ)
     M = round(Int, α * N)
     ξ = rand([-1,1], N, M)
     # ξ = rand(N, M)
@@ -261,7 +260,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 method = :reinforcement, #[:reinforcement, :decimation]
                 r::Float64 = 0., r_step::Float64= 0.001,
                 λ::Float64 = 1.,
-                altsolv::Bool = true,
+                altsolv::Bool = true, altoconv = true,
                 seed::Int = -1)
 
     seed > 0 && srand(seed)
@@ -270,6 +269,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
 
     # if method == :reinforcement
     reinfpar = ReinfParams(r, r_step)
-    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, altsolv=altsolv)
+    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar
+            , altsolv=altsolv, altconv=altconv)
     return mags(g)
 end
