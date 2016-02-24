@@ -1,3 +1,4 @@
+module BP
 using MacroUtils
 
 typealias Mess Float64
@@ -246,3 +247,5 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
         , altsolv=altsolv, altconv=altconv)
     return getW(mags(g))
 end
+
+end#module

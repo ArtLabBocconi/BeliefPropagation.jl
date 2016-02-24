@@ -13,6 +13,13 @@ function GHapp(x)
 end
 GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
 
+# GH(1,x) =GH(x)
+function GH(p, x)
+    Hp = H(x); Hm = 1-Hp
+    Gp = G(x); Gm = Gp
+    (p*Gp - (1-p)*Gm) / (p*Hp + (1-p)*Hm)
+end
+
 abstract AbstractLayer
 
 myatanh(x::Float64) = ifelse(abs(x) > 15, ifelse(x>0,50,-50), atanh(x))

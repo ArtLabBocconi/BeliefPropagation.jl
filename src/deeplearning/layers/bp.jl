@@ -1,4 +1,6 @@
 #TODO Layer not working
+
+
 type BPExactLayer <: AbstractLayer
     l::Int
     K::Int
@@ -30,7 +32,8 @@ type BPExactLayer <: AbstractLayer
     expinv2P::CVec
     expinv2M::CVec
 
-    istoplayer::Bool
+    top_layer::AbstractLayer
+    bottom_layer::AbstractLayer
 end
 
 
@@ -62,20 +65,19 @@ function BPExactLayer(K::Int, N::Int, M::Int)
     expinv2P = fexpinv2P(N)
     expinv2M = fexpinv2M(N)
 
-    istoplayer = K == 1
 
     return BPExactLayer(-1, K, N, M, allm, allmy, allmh
         , allmcav, allmycav, allmhcavtoy,allmhcavtow
         , allh, allhy, allpu,allpd
         , VecVec(), VecVec()
         , fexpf(N), fexpinv0(N), fexpinv2p(N), fexpinv2m(N), fexpinv2P(N), fexpinv2M(N)
-        , istoplayer)
+        , DummyLayer(), DummyLayer())
 end
 
 
 function updateFact!(layer::BPExactLayer, k::Int)
     @extract layer K N M allm allmy allmh allpu allpd
-    @extract layer bottom_allpu top_allpd istoplayer
+    @extract layer bottom_allpu top_allpd
     @extract layer expf expinv0 expinv2M expinv2P expinv2m expinv2p
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
@@ -97,7 +99,7 @@ function updateFact!(layer::BPExactLayer, k::Int)
         end
 
         vH = 2pdtop[a]-1
-        if !istoplayer > 0
+        if !istoplayer(layer)
             s2P = Complex128(0.)
             s2M = Complex128(0.)
             for p=1:N+1
@@ -135,10 +137,112 @@ function updateFact!(layer::BPExactLayer, k::Int)
     end
 end
 
-function updateVarW!{L <: Union{BPExactLayer}}(layer::L, k::Int, r::Float64=0.)
+#############################################################
+#   BPLayer
+##############################################################
+
+type BPLayer <: AbstractLayer
+    l::Int
+    K::Int
+    N::Int
+    M::Int
+
+    allm::VecVec
+    allmy::VecVec
+    allmh::VecVec
+
+    allmcav::VecVecVec
+    allmycav::VecVecVec
+    allmhcavtoy::VecVecVec
+    allmhcavtow::VecVecVec
+
+    allh::VecVec # for W reinforcement
+    allhy::VecVec # for Y reinforcement
+
+    allpu::VecVec # p(σ=up) from fact ↑ to y
+    allpd::VecVec # p(σ=up) from y  ↓ to fact
+
+    top_allpd::VecVec
+    bottom_allpu::VecVec
+
+    top_layer::AbstractLayer
+    bottom_layer::AbstractLayer
+end
+
+
+function BPLayer(K::Int, N::Int, M::Int)
+    # for variables W
+    allm = [zeros(N) for i=1:K]
+    allh = [zeros(N) for i=1:K]
+
+
+    allmcav = [[zeros(N) for i=1:M] for i=1:K]
+    allmycav = [[zeros(N) for i=1:K] for i=1:M]
+    allmhcavtoy = [[zeros(K) for i=1:N] for i=1:M]
+    allmhcavtow = [[zeros(M) for i=1:N] for i=1:K]
+    # for variables Y
+    allmy = [zeros(N) for a=1:M]
+    allhy = [zeros(N) for a=1:M]
+
+    # for Facts
+    allmh = [zeros(M) for k=1:K]
+
+    allpu = [zeros(M) for k=1:K]
+    allpd = [zeros(M) for k=1:N]
+
+
+    return BPLayer(-1, K, N, M, allm, allmy, allmh
+        , allmcav, allmycav, allmhcavtoy,allmhcavtow
+        , allh, allhy, allpu,allpd
+        , VecVec(), VecVec()
+        , DummyLayer(), DummyLayer())
+end
+
+
+function updateFact!(layer::BPLayer, k::Int)
+    @extract layer K N M allm allmy allmh allpu allpd
+    @extract layer bottom_allpu top_allpd
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+    mh = allmh[k];
+    pd = top_allpd[k];
+    for a=1:M
+        my = allmycav[a][k]
+        m = allmcav[k][a]
+        mhw = allmhcavtow[k]
+        mhy = allmhcavtoy[a]
+        Mhtot = 0.
+        Chtot = 0.
+        for i=1:N
+            Mhtot += my[i]*m[i]
+            Chtot += 1 - my[i]^2*m[i]^2
+        end
+        if Chtot == 0
+            Chtot = 1e-8
+        end
+        @assert isfinite(pd[a]) "$(pd)"
+        # if pd[a]*Hp + (1-pd[a])*Hm <= 0.
+        #     pd[a] -= 1e-8
+        # end
+        mh[a] = 1/√Chtot * GH(pd[a], -Mhtot / √Chtot)
+        @assert isfinite(mh[a])
+
+        for i=1:N
+            Mcav = Mhtot - my[i]*m[i]
+            Ccav = sqrt(Chtot - (1-my[i]^2*m[i]^2))
+            mhw[i][k] = my[i]/Ccav * GH(pd[a],-Mcav / Ccav)
+        end
+        if !isbottomlayer(layer)
+            for i=1:N
+                mhy[i][k] = mhw[i][k]* m[i] / my[i]
+            end
+        end
+    end
+end
+
+function updateVarW!{L <: Union{BPLayer, BPExactLayer}}(layer::L, k::Int, r::Float64=0.)
     @extract layer K N M allm allmy allmh allpu allpd allh
-    @extract layer bottom_allpu top_allpd istoplayer
-    @extract layer expf expinv0 expinv2M expinv2P expinv2m expinv2p
+    @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
     m = allm[k]
@@ -158,10 +262,9 @@ function updateVarW!{L <: Union{BPExactLayer}}(layer::L, k::Int, r::Float64=0.)
     return Δ
 end
 
-function updateVarY!{L <: Union{BPExactLayer}}(layer::L, a::Int, ry::Float64=0.)
+function updateVarY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::Float64=0.)
     @extract layer K N M allm allmy allmh allpu allpd allhy
-    @extract layer bottom_allpu top_allpd istoplayer
-    @extract layer expf expinv0 expinv2M expinv2P expinv2m expinv2p
+    @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
 
@@ -195,7 +298,27 @@ function updateVarY!{L <: Union{BPExactLayer}}(layer::L, a::Int, ry::Float64=0.)
     end
 end
 
-function initrand!{L <: Union{BPExactLayer}}(layer::L)
+function update!{L <: Union{BPLayer, BPExactLayer}}(layer::L, r::Float64, ry::Float64)
+    for k=1:layer.K
+        updateFact!(layer, k)
+    end
+    Δ = 0.
+    if !istoplayer(layer) || (istoplayer(layer) && isbottomlayer(layer))
+        for k=1:layer.K
+            δ = updateVarW!(layer, k, r)
+            Δ = max(δ, Δ)
+        end
+    end
+    if !istoplayer(layer) && !isbottomlayer(layer)
+        for a=1:layer.M
+            updateVarY!(layer, a, ry)
+        end
+    end
+    return Δ
+end
+
+
+function initrand!{L <: Union{BPLayer, BPExactLayer}}(layer::L)
     @extract layer K N M allm allmy allmh allpu allpd  top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 

@@ -264,13 +264,11 @@ function updateFact!(layer::TapLayer, k::Int)
         if Chtot == 0
             Chtot = 1e-8
         end
-        Hp = H(-Mhtot / √Chtot); Hm = 1-Hp
-        Gp = G(-Mhtot / √Chtot); Gm = Gp
-        # @assert isfinite(pd[a]) "$(pd)"
-        if pd[a]*Hp + (1-pd[a])*Hm <= 0.
-            pd[a] -= 1e-8
-        end
-        mh[a] = 1/√Chtot*(pd[a]*Gp - (1-pd[a])*Gm) / (pd[a]*Hp + (1-pd[a])*Hm)
+        @assert isfinite(pd[a]) "$(pd)"
+        # if pd[a]*Hp + (1-pd[a])*Hm <= 0.
+        #     pd[a] -= 1e-8
+        # end
+        mh[a] = 1/√Chtot * GH(pd[a], -Mhtot / √Chtot)
         if !isfinite(mh[a])
             println(Chtot)
             println(Gp)
@@ -280,7 +278,7 @@ function updateFact!(layer::TapLayer, k::Int)
 
         c = mh[a] * (Mhtot / Chtot + mh[a])
         Ct[k] += c
-        if layer.l > 2 #no need for bottom layer
+        if !isbottomlayer(layer)
             CYt[a] += c
             for i=1:N
                 MYt[i] += m[i] * mh[a]
@@ -290,9 +288,9 @@ function updateFact!(layer::TapLayer, k::Int)
             Mt[i] += my[i] * mh[a]
         end
 
-        if length(allpu) > 0
+        if !istoplayer(layer)
             pu = allpu[k]
-            pu[a] = Hp
+            pu[a] = H(-Mhtot / √Chtot)
             # @assert isfinite(pu[a])
             pu[a] < 0 && (pu[a]=1e-8)
             pu[a] > 1 && (pu[a]=1-1e-8)
@@ -346,23 +344,6 @@ function updateVarY!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::F
             my[i] = tanh(hy[i])
         end
     end
-end
-
-
-function update!(layer::BPExactLayer, r::Float64, ry::Float64)
-    for k=1:layer.K
-        updateFact!(layer, k)
-    end
-    Δ = 0.
-    for k=1:layer.K
-        δ = updateVarW!(layer, k, r)
-        Δ = max(δ, Δ)
-    end
-
-    for a=1:layer.M
-        updateVarY!(layer, a, ry)
-    end
-    return Δ
 end
 
 function update!{L <: Union{TapLayer,TapExactLayer}}(layer::L, r::Float64, ry::Float64)
