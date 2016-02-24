@@ -220,6 +220,7 @@ function updateFact!(layer::BPLayer, k::Int)
         if Chtot == 0
             Chtot = 1e-8
         end
+        # println("Mhtot $a= $Mhtot pd=$(pd[a])")
         @assert isfinite(pd[a]) "$(pd)"
         # if pd[a]*Hp + (1-pd[a])*Hm <= 0.
         #     pd[a] -= 1e-8
@@ -230,7 +231,7 @@ function updateFact!(layer::BPLayer, k::Int)
         for i=1:N
             Mcav = Mhtot - my[i]*m[i]
             Ccav = sqrt(Chtot - (1-my[i]^2*m[i]^2))
-            mhw[i][k] = my[i]/Ccav * GH(pd[a],-Mcav / Ccav)
+            mhw[i][a] = my[i]/Ccav * GH(pd[a],-Mcav / Ccav)
         end
         if !isbottomlayer(layer)
             for i=1:N
@@ -299,18 +300,26 @@ function updateVarY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::Fl
 end
 
 function update!{L <: Union{BPLayer, BPExactLayer}}(layer::L, r::Float64, ry::Float64)
-    for k=1:layer.K
+    @extract layer K N M allm allmy allmh allpu allpd allhy
+    @extract layer bottom_allpu top_allpd
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+    # println("m=$(allm[1])")
+    # println("mcav=$(allmcav[1][1])")
+    for k=1:K
         updateFact!(layer, k)
     end
+    # println("mhcavw=$(allmhcavtow[1][1])")
     Δ = 0.
     if !istoplayer(layer) || (istoplayer(layer) && isbottomlayer(layer))
-        for k=1:layer.K
+        # println("Updating W")
+        for k=1:K
             δ = updateVarW!(layer, k, r)
             Δ = max(δ, Δ)
         end
     end
     if !istoplayer(layer) && !isbottomlayer(layer)
-        for a=1:layer.M
+        for a=1:M
             updateVarY!(layer, a, ry)
         end
     end
@@ -334,13 +343,11 @@ function initrand!{L <: Union{BPLayer, BPExactLayer}}(layer::L)
     for pu in allpu
         pu[:] = rand(M)
     end
-    for pd in top_allpd
-        pd[:] = rand(M)
-    end
 
+    # if!isbottomlayer
     for k=1:K,a=1:M,i=1:N
         allmcav[k][a][i] = allm[k][i]
-        allmycav[a][k][i] = allmy[a][i]
+    #     allmycav[a][k][i] = allmy[a][i]
         allmhcavtow[k][i][a] = allmh[k][a]*allmy[a][i]
         allmhcavtoy[a][i][k] = allmh[k][a]*allm[k][i]
     end
