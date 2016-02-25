@@ -2,8 +2,8 @@ module BeliefPropagation
 using LightGraphs
 import Base.show
 export KSATBP, Ising
-export PerceptronBP, PerceptronTAP, PerceptronETAP
-export CommitteeBP, CommitteeTAP
+export PerceptronEdTAP
+export DeepBinary
 
 Base.getindex(p::Ptr) = unsafe_load(p)
 Base.setindex!{T}(p::Ptr{T}, x::T) = unsafe_store!(p, x)

@@ -197,16 +197,16 @@ function energy{T}(g::FactorGraph, W::Vector{Vector{Vector{T}}})
     @extract g M K σ ξ
     L=length(W)
     E = 0
-    h = zeros(M)
+    stabilities = zeros(M)
     for a=1:M
         σks = ξ[:,a]
         for l=1:L
-            l==L && (h[a] = dot(σks, W[L][1]))
+            l==L && (stabilities[a] = dot(σks, W[L][1]))
             σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
         end
         E += σ[a] * sum(σks) > 0 ? 0 : 1
     end
-    E, h
+    E, stabilities
 end
 
 energy(g::FactorGraph) = energy(g, getW(mags(g)))
@@ -238,9 +238,12 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
     initrand!(g)
     fixtopbottom!(g)
     reinfpar = ReinfParams(r, r_step, ry, ry_step)
+
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar,
             altsolv=altsolv, altconv=altconv, plotinfo=plotinfo)
-    return getW(mags(g))
+
+    E, stab = energy(g)
+    return g, getW(mags(g)), E, stab
 end
 
 end #module
