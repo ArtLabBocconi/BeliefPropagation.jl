@@ -35,7 +35,6 @@ type FactorGraph
             if      layertype[l] == :tap
                 push!(layers, TapLayer(K[l+1], K[l], M))
                 println("Created TapLayer")
-
             elseif  layertype[l] == :tapex
                 push!(layers, TapExactLayer(K[l+1], K[l], M))
                 println("Created TapExactLayer")
@@ -83,12 +82,14 @@ end
 
 function initrand!(g::FactorGraph)
     @extract g M layers K ξ
-    for lay in layers[2:end-2]
+    for lay in layers[2:end-1]
         initrand!(lay)
     end
-    if g.L == 1
-        initrand!(layers[end-1])
-    else
+end
+
+function fixtopbottom!(g::FactorGraph)
+    @extract g M layers K ξ
+    if g.L != 1
         g.layers[end-1].allm[1][:] = 1
     end
     for a=1:M
@@ -99,6 +100,7 @@ end
 function update!(g::FactorGraph, r::Float64, ry::Float64)
     Δ = 0.
     for lay in g.layers[2:end-1]
+        # println("# Updating layer $(lay.l)")
         δ = update!(lay, r, ry)
         Δ = max(δ, Δ)
     end
@@ -234,6 +236,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
     seed > 0 && srand(seed)
     g = FactorGraph(ξ, σ, K, layers, βms = βms, rms = rms)
     initrand!(g)
+    fixtopbottom!(g)
     reinfpar = ReinfParams(r, r_step, ry, ry_step)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar,
             altsolv=altsolv, altconv=altconv, plotinfo=plotinfo)

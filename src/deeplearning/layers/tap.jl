@@ -269,11 +269,11 @@ function updateFact!(layer::TapLayer, k::Int)
         #     pd[a] -= 1e-8
         # end
         mh[a] = 1/√Chtot * GH(pd[a], -Mhtot / √Chtot)
-        if !isfinite(mh[a])
-            println(Chtot)
-            println(pd[a])
-        end
-        # @assert isfinite(mh[a])
+        # if !isfinite(mh[a])
+        #     println(Chtot)
+        #     println(pd[a])
+        # end
+        @assert isfinite(mh[a])
 
         c = mh[a] * (Mhtot / Chtot + mh[a])
         Ct[k] += c
