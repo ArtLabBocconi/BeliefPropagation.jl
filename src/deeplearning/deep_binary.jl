@@ -230,6 +230,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 altsolv::Bool = true, altconv::Bool = false,
                 seed::Int = -1, plotinfo=-1,
                 βms = 1., rms = 1.)
+
     for l=1:length(K)
         @assert K[l] % 2 == 1
     end

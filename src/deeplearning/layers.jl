@@ -37,6 +37,7 @@ include("layers/tap.jl")
 
 istoplayer(layer::AbstractLayer) = (typeof(layer.top_layer) == OutputLayer)
 isbottomlayer(layer::AbstractLayer) = (typeof(layer.bottom_layer) == InputLayer)
+isonlylayer(layer::AbstractLayer) = istoplayer(layer) && isbottomlayer(layer)
 
 function Base.show{L <: Union{TapExactLayer,TapLayer}}(io::IO, layer::L)
     @extract layer K N M allm allmy allmh allpu allpd

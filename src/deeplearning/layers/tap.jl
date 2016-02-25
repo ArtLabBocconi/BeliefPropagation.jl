@@ -168,7 +168,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
             sr = vH * real(s0 / (pp*(s0 + 2s2p) + pm*(s0 + 2s2m)))
             sr > 1 && (sr=1.)
             sr < -1 && (sr=-1.)
-            if istoplayer(layer)
+            if istoplayer(layer) && !isonlylayer(layer)
                 allpd[i][a] = (1 + (m[i] * sr))/2
             else
                 MYt[i] +=  atanh(m[i] * sr)
