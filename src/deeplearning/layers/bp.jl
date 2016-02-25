@@ -127,9 +127,15 @@ function updateFact!(layer::BPExactLayer, k::Int)
             sr = vH * real(s0 / (pp*(s0 + 2s2p) + pm*(s0 + 2s2m)))
             sr > 1 && (sr=1.)
             sr < -1 && (sr=-1.)
-
-            mhw[i][a] =  atanh(mycav[i] * sr)
-            mhy[i][k] =  atanh(mcav[i] * sr)
+            sr *= (1-1e-15) #avoid atanh(1)
+            if !istoplayer(layer) || isonlylayer(layer)
+                mhw[i][a] =  atanh(mycav[i] * sr)
+                @assert isfinite(mhw[i][a]) "mhw[i][a]=$(mhw[i][a]) $(mycav[i]) $sr"
+            end
+            if !isbottomlayer(layer)
+                mhy[i][k] =  atanh(mcav[i] * sr)
+                @assert isfinite(mhy[i][k]) "mhy[i][k]=$(mhy[i][k]) $(mcav) $sr"
+            end
             @assert isfinite(mycav[i])
             @assert isfinite(allpd[i][a])
             @assert isfinite(sr)
@@ -278,11 +284,11 @@ function updateVarY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::Fl
         @assert pu >= 0 && pu <= 1 "$pu $i $a $(bottom_allpu[i])"
 
         hy[i] = sum(mhy) + ry* hy[i]
-        @assert isfinite(hy[i])
-        allpd[i][a] = (1+tanh(hy[i]))/2
+        @assert isfinite(hy[i]) "isfinite(hy[i]) mhy=$mhy"
+        allpd[i][a] = (1+tanh(hy[i])) / 2
         @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
         # pinned from below (e.g. from input layer)
-        if pu > 1-1e-15 || pu < 1e-15
+        if pu > 1-1e-10 || pu < 1e-10
             hy[i] = pu > 0.5 ? 100 : -100
             my[i] = 2pu-1
             for k=1:K
@@ -290,7 +296,7 @@ function updateVarY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::Fl
             end
         else
             hy[i] += atanh(2*pu -1)
-            # @assert isfinite(hy[i]) "isfinite(hy[i]) pu=$pu"
+            @assert isfinite(hy[i]) "isfinite(hy[i]) pu=$pu"
             my[i] = tanh(hy[i])
             for k=1:K
                 mycav[k][i] = tanh(hy[i]-mhy[k])
@@ -311,14 +317,14 @@ function update!{L <: Union{BPLayer, BPExactLayer}}(layer::L, r::Float64, ry::Fl
     end
     # println("mhcavw=$(allmhcavtow[1][1])")
     Δ = 0.
-    if !istoplayer(layer) || (istoplayer(layer) && isbottomlayer(layer))
+    if !istoplayer(layer) || isonlylayer(layer)
         # println("Updating W")
         for k=1:K
             δ = updateVarW!(layer, k, r)
             Δ = max(δ, Δ)
         end
     end
-    if !istoplayer(layer) && !isbottomlayer(layer)
+    if !isbottomlayer(layer)
         for a=1:M
             updateVarY!(layer, a, ry)
         end
@@ -343,13 +349,40 @@ function initrand!{L <: Union{BPLayer, BPExactLayer}}(layer::L)
     for pu in allpu
         pu[:] = rand(M)
     end
+    for pd in allpd
+        pd[:] = rand(M)
+    end
 
     # if!isbottomlayer
     for k=1:K,a=1:M,i=1:N
         allmcav[k][a][i] = allm[k][i]
-    #     allmycav[a][k][i] = allmy[a][i]
+        allmycav[a][k][i] = allmy[a][i]
         allmhcavtow[k][i][a] = allmh[k][a]*allmy[a][i]
         allmhcavtoy[a][i][k] = allmh[k][a]*allm[k][i]
     end
 
+end
+
+function fixW!{L <: Union{BPLayer, BPExactLayer}}(layer::L, w=1.)
+    @extract layer K N M allm allmy allmh allpu allpd top_allpd
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+    for k=1:K,i=1:N
+        allm[k][i] = w
+    end
+    for k=1:K, a=1:M, i=1:N
+        allmcav[k][a][i] = allm[k][i]
+    end
+end
+
+function fixY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, ξ::Matrix)
+    @extract layer K N M allm allmy allmh allpu allpd top_allpd
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+    for a=1:M,i=1:N
+        allmy[a][i] = ξ[i,a]
+    end
+    for a=1:M, k=1:K, i=1:N
+        allmycav[a][k][i] = allmy[a][i]
+    end
 end

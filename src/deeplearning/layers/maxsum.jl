@@ -23,7 +23,8 @@ type MaxSumLayer <: AbstractLayer
     top_allpd::VecVec
     bottom_allpu::VecVec
 
-    istoplayer::Bool
+    top_layer::AbstractLayer
+    bottom_layer::AbstractLayer
 
     βms::Float64
     rms::Float64
@@ -49,19 +50,18 @@ function MaxSumLayer(K::Int, N::Int, M::Int; βms=1., rms=1.)
     allpu = [zeros(M) for k=1:K]
     allpd = [zeros(M) for k=1:N]
 
-    istoplayer = K == 1
-
     return MaxSumLayer(-1, K, N, M, allm, allmy, allmh
         , allmcav, allmycav, allmhcavtoy,allmhcavtow
         , allh, allhy, allpu,allpd
         , VecVec(), VecVec()
-        , istoplayer, βms, rms)
+        , DummyLayer(), DummyLayer()
+        , βms, rms)
 end
 
 
 function updateVarW!{L <: Union{MaxSumLayer}}(layer::L, k::Int, r::Float64=0.)
     @extract layer K N M allm allmy allmh allpu allpd allhy allh rms
-    @extract layer bottom_allpu top_allpd istoplayer
+    @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
 
@@ -95,7 +95,7 @@ end
 
 function updateVarY!{L <: Union{MaxSumLayer}}(layer::L, a::Int, ry::Float64=0.)
     @extract layer K N M allm allmy allmh allpu allpd allhy βms
-    @extract layer bottom_allpu top_allpd istoplayer
+    @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
 
@@ -129,7 +129,7 @@ end
 
 function updateFact!(layer::MaxSumLayer, k::Int)
     @extract layer K N M allm allmy allmh allpu allpd βms
-    @extract layer bottom_allpu top_allpd istoplayer
+    @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
     mh = allmh[k];
@@ -309,22 +309,25 @@ end
 
 
 function update!{L <: Union{MaxSumLayer}}(layer::L, r::Float64, ry::Float64)
-    @extract layer K N M allm allmy allmh allpu allpd  istoplayer
+    @extract layer K N M allm allmy allmh allpu allpd
     # println(layer)
     for k=1:K
         updateFact!(layer, k)
     end
     Δ = 0.
-    if !istoplayer
+    if !istoplayer(layer) || isonlylayer(layer)
         for k=1:K
             δ = updateVarW!(layer, k, r)
             Δ = max(δ, Δ)
         end
+    end
 
+    if !istoplayer(layer) && !isbottomlayer(layer)
         for a=1:M
             updateVarY!(layer, a, ry)
         end
     end
+
     return Δ
 end
 
@@ -354,9 +357,18 @@ function initrand!{L <: Union{MaxSumLayer}}(layer::L)
 
     for k=1:K,a=1:M,i=1:N
         allmcav[k][a][i] = allm[k][i]
-        allmycav[a][k][i] = allmy[a][i]
+        # allmycav[a][k][i] = allmy[a][i]
         allmhcavtow[k][i][a] = allmh[k][a]*allmy[a][i]
         allmhcavtoy[a][i][k] = allmh[k][a]*allm[k][i]
     end
 
+end
+
+
+function fixY!{L <: Union{MaxSumLayer}}(layer::L, ξ::Matrix)
+    @extract layer K N M allm allmy allmh allpu allpd  top_allpd
+
+    for a=1:M, i=1:N
+        allmy[a][i] = ξ[i,a]
+    end
 end

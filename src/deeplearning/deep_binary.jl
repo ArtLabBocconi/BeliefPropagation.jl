@@ -90,11 +90,10 @@ end
 function fixtopbottom!(g::FactorGraph)
     @extract g M layers K ξ
     if g.L != 1
-        g.layers[end-1].allm[1][:] = 1
+        fixW!(g.layers[end-1], 1.)
     end
-    for a=1:M
-        layers[2].allmy[a][:] = ξ[:,a]
-    end
+
+    fixY!(g.layers[2], ξ)
 end
 
 function update!(g::FactorGraph, r::Float64, ry::Float64)

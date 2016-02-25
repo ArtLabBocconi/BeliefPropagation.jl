@@ -363,7 +363,7 @@ function update!{L <: Union{TapLayer,TapExactLayer}}(layer::L, r::Float64, ry::F
         updateFact!(layer, k)
     end
     Δ = 0.
-    if !istoplayer(layer) || (istoplayer(layer) && isbottomlayer(layer))
+    if !istoplayer(layer) || isonlylayer(layer)
         for k=1:K
             δ = updateVarW!(layer, k, r)
             Δ = max(δ, Δ)
@@ -396,5 +396,20 @@ function initrand!{L <: Union{TapExactLayer,TapLayer}}(layer::L)
     for pd in allpd
         pd[:] = rand(M)
     end
+end
 
+function fixW!{L <: Union{TapLayer, TapExactLayer}}(layer::L, w=1.)
+    @extract layer K N M allm allmy allmh allpu allpd  top_allpd
+
+    for k=1:K, i=1:N
+        allm[k][i] = w
+    end
+end
+
+function fixY!{L <: Union{TapLayer, TapExactLayer}}(layer::L, ξ::Matrix)
+    @extract layer K N M allm allmy allmh allpu allpd  top_allpd
+
+    for a=1:M, i=1:N
+        allmy[a][i] = ξ[i,a]
+    end
 end
