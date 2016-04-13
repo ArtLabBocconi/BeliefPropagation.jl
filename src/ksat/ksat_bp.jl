@@ -4,7 +4,8 @@ typealias MessU Float64  # ̂ν(a→i) = P(σ_i != J_ai)
 typealias MessH Float64 #  ν(i→a) = P(σ_i != J_ai)
 
 getref(v::Vector, i::Integer) = pointer(v, i)
-Mess() = Mess(0.)
+MessU(x=0.) = x
+MessH(x=0.) = x
 
 typealias PU Ptr{MessU}
 typealias PH Ptr{MessH}
@@ -307,7 +308,7 @@ function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5
         , reinfpar::ReinfParams=ReinfParams(), alt_when_solved::Bool=false)
 
     for it=1:maxiters
-        write("it=$it ... ")
+        print("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.r, reinfpar.tγ)
         E = energy(g)
         fp = numpinned(g) / g.N
@@ -403,7 +404,7 @@ function solve(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
     seed > 0 && srand(seed)
     g = FactorGraphKSAT(cnf)
     initrand!(g)
-
+    E = -1
     if method == :reinforcement
         reinfpar = ReinfParams(r, r_step, γ, γ_step)
         converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, alt_when_solved=alt_when_solved)
@@ -418,5 +419,5 @@ function solve(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
             (E == 0 || numdec == g.N) && break
         end
     end
-    return getσ(mags(g))
+    return E, getσ(mags(g))
 end

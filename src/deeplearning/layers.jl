@@ -20,6 +20,32 @@ function GH(p, x)
     (p*Gp - (1-p)*Gm) / (p*Hp + (1-p)*Hm)
 end
 
+# function DH(p, x, y, C)
+#     Hpp = H(-(x+y)/C)
+#     Hpm = H(-(x-y)/C)
+#     Hmp = 1 - Hpp
+#     Hmm = 1 - Hpm
+#     (p*(Hpp - Hpm) + (1-p)*(Hmp - Hmm)) / (p*(Hpp + Hpm) + (1-p)*(Hmp + Hmm))
+# end
+#
+# function DH(p, x, C)
+#     Hp = H(-x/C)
+#     Hm = 1 - Hm
+#     (p*Hp - (1-p)*Hm) / (p*Hp  + (1-p)*Hm)
+# end
+
+function DH(p, x, y, C)
+    Hpp = H(-(x+y)/C)
+    Hpm = H(-(x-y)/C)
+    Hmp = 1 - Hpp
+    Hmm = 1 - Hpm
+    0.5 * log((p*Hpp+ (1-p)*Hmp) / (p*Hpm + (1-p)*Hmm))
+end
+
+myatanh(x) = atanh(x)
+
+
+
 abstract AbstractLayer
 
 myatanh(x::Float64) = ifelse(abs(x) > 15, ifelse(x>0,50,-50), atanh(x))

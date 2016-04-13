@@ -8,4 +8,8 @@ println("@ Testing DeepLearning...")
 include("deeplearning.jl")
 println("@ ... done.")
 
+println("@ Testing KSAT...")
+include("kast.jl")
+println("@ ... done.")
+
 println("@ ALL TESTS PASSED!")

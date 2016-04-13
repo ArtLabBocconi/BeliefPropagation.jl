@@ -254,9 +254,16 @@ function updateFact!(layer::TapLayer, k::Int)
         Mhtot = 0.
         Chtot = 0.
         #TODO controllare il termine di reazione
-        for i=1:N
-            Mhtot += my[i]*m[i]
-            Chtot += 1 - my[i]^2*m[i]^2
+        if !isbottomlayer(layer)
+            for i=1:N
+                Mhtot += my[i]*m[i]
+                Chtot += 1 - my[i]^2*m[i]^2
+            end
+        else
+            for i=1:N
+                Mhtot += my[i]*m[i]
+                Chtot += my[i]^2 *(1 - m[i]^2)
+            end
         end
 
         Mhtot += -mh[a]*Chtot
@@ -269,10 +276,13 @@ function updateFact!(layer::TapLayer, k::Int)
         #     pd[a] -= 1e-8
         # end
         mh[a] = 1/√Chtot * GH(pd[a], -Mhtot / √Chtot)
-        # if !isfinite(mh[a])
-        #     println(Chtot)
-        #     println(pd[a])
-        # end
+        # mh[a] = DH(pd[a], Mhtot, √Chtot)
+        if !isfinite(mh[a])
+            println("mh[a]=$(mh[a]) √Chtot=$(√Chtot) Mhtot=$Mhtot")
+            println("pd[a]=$(pd[a])")
+            println("G=$(G(-Mhtot / √Chtot)) H=$(H(-Mhtot / √Chtot))")
+            # mh[a] = 1e-10
+        end
         @assert isfinite(mh[a])
 
         c = mh[a] * (Mhtot / Chtot + mh[a])
@@ -323,24 +333,32 @@ function updateVarY!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::F
     @extract layer allhy CYtot MYtot Mtot Ctot bottom_allpu
 
     MYt=MYtot[a]; CYt = CYtot[a]; my=allmy[a]; hy=allhy[a]
-    for i=1:N
-        pu = bottom_allpu[i][a];
-        @assert pu >= 0 && pu <= 1 "$pu $i $a $(bottom_allpu[i])"
+    if !isbottomlayer(layer)
+        for i=1:N
+            pu = bottom_allpu[i][a];
+            @assert pu >= 0 && pu <= 1 "$pu $i $a $(bottom_allpu[i])"
 
-        #TODO inutile calcolarli per il primo layer
-        hy[i] = MYt[i] + my[i] * CYt + ry* hy[i]
-        @assert isfinite(hy[i]) "MYt[i]=$(MYt[i]) my[i]=$(my[i]) CYt=$CYt hy[i]=$(hy[i])"
-        allpd[i][a] = (1+tanh(hy[i]))/2
-        @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
-        # pinned from below (e.g. from input layer)
-        if pu > 1-1e-10 || pu < 1e-10 # NOTE:1-e15 dà risultati peggiori
-            hy[i] = pu > 0.5 ? 100 : -100
+            #TODO inutile calcolarli per il primo layer
+            hy[i] = MYt[i] + my[i] * CYt + ry* hy[i]
+            @assert isfinite(hy[i]) "MYt[i]=$(MYt[i]) my[i]=$(my[i]) CYt=$CYt hy[i]=$(hy[i])"
+            allpd[i][a] = (1+tanh(hy[i]))/2
+            @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
+            # pinned from below (e.g. from input layer)
+            if pu > 1-1e-10 || pu < 1e-10 # NOTE:1-e15 dà risultati peggiori
+                hy[i] = pu > 0.5 ? 100 : -100
+                my[i] = 2pu-1
+
+            else
+                hy[i] += atanh(2*pu -1)
+                @assert isfinite(hy[i]) "isfinite(hy[i]) pu=$pu"
+                my[i] = tanh(hy[i])
+            end
+        end
+    else
+        for i=1:N
+            pu = bottom_allpu[i][a];
+            @assert pu >= 0 && pu <= 1 "$pu $i $a $(bottom_allpu[i])"
             my[i] = 2pu-1
-
-        else
-            hy[i] += atanh(2*pu -1)
-            @assert isfinite(hy[i]) "isfinite(hy[i]) pu=$pu"
-            my[i] = tanh(hy[i])
         end
     end
 end
@@ -381,14 +399,15 @@ end
 
 function initrand!{L <: Union{TapExactLayer,TapLayer}}(layer::L)
     @extract layer K N M allm allmy allmh allpu allpd  top_allpd
+    ϵ = 1e-1
     for m in allm
-        m[:] = 2*rand(N) - 1
+        m[:] = (2*rand(N) - 1)*ϵ
     end
     for my in allmy
-        my[:] = 2*rand(N) - 1
+        my[:] = (2*rand(N) - 1)*ϵ
     end
     for mh in allmh
-        mh[:] = 2*rand(M) - 1
+        mh[:] = (2*rand(M) - 1)*ϵ
     end
     for pu in allpu
         pu[:] = rand(M)

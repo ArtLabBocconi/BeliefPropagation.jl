@@ -109,6 +109,8 @@ function updateFact!(layer::BPExactLayer, k::Int)
             mUp = real(s2P - s2M) / real(s2P + s2M)
             @assert isfinite(mUp)
             allpu[k][a] = (1+mUp)/2
+            (allpu[k][a] <= 0) && (allpu[k][a] = 1e-10)
+            (allpu[k][a] >= 1) && (allpu[k][a] = 1-1e-10)
             mh[a] = real((1+vH)*s2P - (1-vH)*s2M) / real((1+vH)+s2P + (1-vH)*s2M)
         end
 
@@ -219,10 +221,18 @@ function updateFact!(layer::BPLayer, k::Int)
         mhy = allmhcavtoy[a]
         Mhtot = 0.
         Chtot = 0.
-        for i=1:N
-            Mhtot += my[i]*m[i]
-            Chtot += 1 - my[i]^2*m[i]^2
+        if !isbottomlayer(layer)
+            for i=1:N
+                Mhtot += my[i]*m[i]
+                Chtot += 1 - my[i]^2*m[i]^2
+            end
+        else
+            for i=1:N
+                Mhtot += my[i]*m[i]
+                Chtot += my[i]^2*(1 - m[i]^2)
+            end
         end
+
         if Chtot == 0
             Chtot = 1e-8
         end
@@ -233,15 +243,29 @@ function updateFact!(layer::BPLayer, k::Int)
         # end
         mh[a] = 1/√Chtot * GH(pd[a], -Mhtot / √Chtot)
         @assert isfinite(mh[a])
-
-        for i=1:N
-            Mcav = Mhtot - my[i]*m[i]
-            Ccav = sqrt(Chtot - (1-my[i]^2*m[i]^2))
-            mhw[i][a] = my[i]/Ccav * GH(pd[a],-Mcav / Ccav)
-        end
         if !isbottomlayer(layer)
             for i=1:N
-                mhy[i][k] = mhw[i][k]* m[i] / my[i]
+                Mcav = Mhtot - my[i]*m[i]
+                Ccav = sqrt(Chtot - (1-my[i]^2 * m[i]^2))
+                # mhw[i][a] = my[i]/Ccav * GH(pd[a],-Mcav / Ccav)
+                mhw[i][a] = myatanh(my[i]/Ccav * GH(pd[a],-Mcav / Ccav))
+            end
+        else
+            for i=1:N
+                Mcav = Mhtot - my[i]*m[i]
+                Ccav = sqrt(Chtot - my[i]^2*(1-m[i]^2))
+                # mhw[i][a] = my[i]/Ccav * GH(pd[a],-Mcav / Ccav)
+                # mhw[i][a] = myatanh(my[i]/Ccav * GH(pd[a],-Mcav / Ccav))
+                mhw[i][a] = DH(pd[a], Mcav, my[i], Ccav)
+                # t = DH(pd[a], Mcav, my[i], Ccav)
+                # @assert abs(t-mhw[i][a]) < 1e-1 "pd=$(pd[a]) DH=$t atanh=$(mhw[i][a]) Mcav=$Mcav, my=$(my[i])"
+            end
+        end
+
+        if !isbottomlayer(layer)
+            for i=1:N
+                # mhy[i][k] = mhw[i][k]* m[i] / my[i]
+                mhy[i][a] = myatanh(m[i]/Ccav * GH(pd[a],-Mcav / Ccav))
             end
         end
     end
@@ -286,6 +310,8 @@ function updateVarY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::Fl
         hy[i] = sum(mhy) + ry* hy[i]
         @assert isfinite(hy[i]) "isfinite(hy[i]) mhy=$mhy"
         allpd[i][a] = (1+tanh(hy[i])) / 2
+        (allpd[i][a] <= 0.) && (allpd[i][a] = 1e-10)
+        (allpd[i][a] >= 1.) && (allpd[i][a] = 1-1e-10)
         @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
         # pinned from below (e.g. from input layer)
         if pu > 1-1e-10 || pu < 1e-10
