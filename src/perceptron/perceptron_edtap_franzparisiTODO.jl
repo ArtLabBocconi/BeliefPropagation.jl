@@ -21,8 +21,7 @@ let s = Dict{Int,Tuple{Vector{Float64},Vector{Float64}}}()
         return (map(Float64, x * √big(2.0)), map(Float64, w / √(big(π))))
     end
 end
-
-function ∫D(f; n=nint)
+function ∫D(f; n=nint, int=nothing)
     (xs, ws) = gw(n)
     s = 0.0
     for (x,w) in zip(xs, ws)
@@ -49,9 +48,13 @@ type FactorGraphTAP
     ξ::Matrix{Int}
     σ::Vector{Int}
     m::Vector{Float64}
+    mt::Vector{Float64}
     ρ::Vector{Float64}
+    ρt::Vector{Float64}
     mh::Vector{Float64}
     ρh::Vector{Float64}
+    mht::Vector{Float64}
+    ρht::Vector{Float64}
     γ::Float64
     y::Float64
 
@@ -60,7 +63,7 @@ type FactorGraphTAP
         M = length(σ)
         @assert size(ξ, 2) == M
         println("# N=$N M=$M α=$(M/N)")
-        new(N, M, ξ, σ, zeros(N), zeros(N), zeros(M), zeros(M),  γ, y)
+        new(N, M, ξ, σ, zeros(N), zeros(N), zeros(N), zeros(N), zeros(M), zeros(M), zeros(M), zeros(M), γ, y)
     end
 end
 
@@ -75,21 +78,29 @@ type ReinfParams
 end
 
 function initrand!(g::FactorGraphTAP)
+    g.mt[:] = (2*rand(g.N) - 1)/2
     g.m[:] = (2*rand(g.N) - 1)/2
+    g.ρt[:] = g.mt[:].* g.m[:]. + 1e-4
     g.ρ[:] = g.m[:].^2 + 1e-2
-    g.mh[:] = (2*rand(g.M) - 1)/2
+
+    g.mth[:] = (2*rand(g.N) - 1)/2
+    g.mh[:] = (2*rand(g.N) - 1)/2
+    g.ρth[:] = g.mth[:].* g.mh[:]. + 1e-4
     g.ρh[:] = g.mh[:].^2 + 1e-2
 end
 
 ### Update functions
-J0(a, b, y) = ∫D(z->H(-a-b*z)^y)
-J1(a, b, y) = ∫D(z->H(-a-b*z)^y * GH(-a-b*z))
-JD(a, b, y) = ∫D(z->H(-a-b*z)^y * (-GH(-a-b*z)*(a+b*z)-GH(-a-b*z)^2))
-J2(a, b, y) = ∫D(z->H(-a-b*z)^y * GH(-a-b*z)^2)
-J012(a, b, y) = J0(a, b, y), J1(a, b, y), J2(a, b, y)
-K0(a, b, γ, y) = K0p(a+γ, b, y) + K0p(a-γ, b, y)
-K1(a, b, γ, y) = K1p(a+γ, b, y) + K1p(a-γ, b, y)
-K2(a, b, γ, y) = K2p(a+γ, b, y) + K2p(a-γ, b, y)
+J00(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z))
+J10(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z))
+J20(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z)^2)
+J01(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-c-d*z))
+J02(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-c-d*z)^2)
+J11(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z) * GH(-c-d*z))
+
+#TODO: change from here
+K00(a, b, γ, y) = K0p(a+γ, b, y) + K0p(a-γ, b, y)
+K10(a, b, γ, y) = K1p(a+γ, b, y) + K1p(a-γ, b, y)
+K20(a, b, γ, y) = K2p(a+γ, b, y) + K2p(a-γ, b, y)
 K0p(a, b, y) = ∫D(z->cosh(a+b*z)^y)
 K1p(a, b, y) = ∫D(z->cosh(a+b*z)^y * tanh(a+b*z))
 K2p(a, b, y) = ∫D(z->cosh(a+b*z)^y * tanh(a+b*z)^2)
@@ -130,10 +141,8 @@ function oneBPiter!(g::FactorGraphTAP)
         @assert isfinite(ρh[a])
 
         R̂tot += ρh[a] - mh[a]^2
-        jd = - (ρh[a] + 1/(Ctot + Rtot)*(mh[a]*Mtot + (y-1)*ρh[a]*Rtot))
-        # jd = 1/Ctot * JD(σ[a]*Mtot/√Ctot, √Rtot/√Ctot, y) / j0
-        # @assert abs(jd1 - jd) < 1e-5
-        Ô += y*(ρh[a] - mh[a]^2) + jd
+        Ô += y*(ρh[a] - mh[a]^2) - (ρh[a] + 1/(Ctot + Rtot)*(mh[a]*Mtot + (y-1)*ρh[a]*Rtot))
+        # Ô +=  - (mh[a]^2 + 1/(Ctot)*(mh[a]*Mtot))
     end
     # println("@ ", R̂tot, " ", Ô)
     R̂tot <= 0. && (R̂tot=1e-10)
@@ -253,8 +262,7 @@ function therm_functions(g::FactorGraphTAP)
         Mtot += -mh[a]*O
         j0 = J0(σ[a]*Mtot/√Ctot, √Rtot/√Ctot, y)
         R̂tot += ρh[a] - mh[a]^2
-        jd = - (ρh[a] + 1/(Ctot + Rtot)*(mh[a]*Mtot + (y-1)*ρh[a]*Rtot))
-        Ô += y*(ρh[a] - mh[a]^2) + jd
+        Ô += y*(ρh[a] - mh[a]^2) - (ρh[a] + 1/(Ctot + Rtot)*(mh[a]*Mtot + (y-1)*ρh[a]*Rtot))
 
         ψ += log(j0)
     end

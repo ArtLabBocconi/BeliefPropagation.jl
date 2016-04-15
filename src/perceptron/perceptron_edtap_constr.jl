@@ -1,3 +1,4 @@
+module PF
 using MacroUtils
 using FastGaussQuadrature
 
@@ -13,7 +14,6 @@ GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
 
 ## Integration routines #####
 ## Gauss integration
-nint = 100
 let s = Dict{Int,Tuple{Vector{Float64},Vector{Float64}}}()
     global gw
     gw(n::Int) = get!(s, n) do
@@ -21,8 +21,7 @@ let s = Dict{Int,Tuple{Vector{Float64},Vector{Float64}}}()
         return (map(Float64, x * √big(2.0)), map(Float64, w / √(big(π))))
     end
 end
-
-function ∫D(f; n=nint)
+function ∫D(f; n=200)
     (xs, ws) = gw(n)
     s = 0.0
     for (x,w) in zip(xs, ws)
@@ -49,9 +48,13 @@ type FactorGraphTAP
     ξ::Matrix{Int}
     σ::Vector{Int}
     m::Vector{Float64}
+    mt::Vector{Float64}
     ρ::Vector{Float64}
+    ρt::Vector{Float64}
     mh::Vector{Float64}
     ρh::Vector{Float64}
+    mth::Vector{Float64}
+    ρth::Vector{Float64}
     γ::Float64
     y::Float64
 
@@ -60,7 +63,7 @@ type FactorGraphTAP
         M = length(σ)
         @assert size(ξ, 2) == M
         println("# N=$N M=$M α=$(M/N)")
-        new(N, M, ξ, σ, zeros(N), zeros(N), zeros(M), zeros(M),  γ, y)
+        new(N, M, ξ, σ, zeros(N), zeros(N), zeros(N), zeros(N), zeros(M), zeros(M), zeros(M), zeros(M), γ, y)
     end
 end
 
@@ -75,83 +78,150 @@ type ReinfParams
 end
 
 function initrand!(g::FactorGraphTAP)
-    g.m[:] = (2*rand(g.N) - 1)/2
+    g.mt[:] = (2*rand(g.N) - 1)/2
+    g.m[:] = g.mt[:] + 1e-3*(2*rand(g.N) - 1)
     g.ρ[:] = g.m[:].^2 + 1e-2
-    g.mh[:] = (2*rand(g.M) - 1)/2
-    g.ρh[:] = g.mh[:].^2 + 1e-2
+    g.ρt[:] = g.mt[:].* g.m[:] + 1e-4
+
+    g.mth[:] = (2*rand(g.M) - 1)/2
+    g.mh[:] = g.mth[:] + 1e-3*(2*rand(g.M) - 1)
+    g.ρh[:] = g.mh[:].^2  + 1e-2
+    g.ρth[:] = g.mth[:].* g.mh[:] + 1e-4
 end
 
 ### Update functions
-J0(a, b, y) = ∫D(z->H(-a-b*z)^y)
-J1(a, b, y) = ∫D(z->H(-a-b*z)^y * GH(-a-b*z))
-JD(a, b, y) = ∫D(z->H(-a-b*z)^y * (-GH(-a-b*z)*(a+b*z)-GH(-a-b*z)^2))
-J2(a, b, y) = ∫D(z->H(-a-b*z)^y * GH(-a-b*z)^2)
-J012(a, b, y) = J0(a, b, y), J1(a, b, y), J2(a, b, y)
-K0(a, b, γ, y) = K0p(a+γ, b, y) + K0p(a-γ, b, y)
-K1(a, b, γ, y) = K1p(a+γ, b, y) + K1p(a-γ, b, y)
-K2(a, b, γ, y) = K2p(a+γ, b, y) + K2p(a-γ, b, y)
+J00(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z))
+J10(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z))
+J20(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z)^2)
+J01(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-c-d*z))
+J02(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-c-d*z)^2)
+J11(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z) * GH(-c-d*z))
+JD0(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * (-GH(-a-b*z)*(a+b*z)-GH(-a-b*z)^2))
+J0D(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * (-GH(-c-d*z)*(c+d*z)-GH(-c-d*z)^2))
+
+K00(a, b, c, γ, y) = exp(c)*K0p(a+γ, b, y) + exp(-c)*K0p(a-γ, b, y)
+K10(a, b, c, γ, y) = exp(c)*K1p(a+γ, b, y) + exp(-c)*K1p(a-γ, b, y)
+K20(a, b, c, γ, y) = exp(c)*K2p(a+γ, b, y) + exp(-c)*K2p(a-γ, b, y)
+K11(a, b, c, γ, y) = exp(c)*K1p(a+γ, b, y) - exp(-c)*K1p(a-γ, b, y)
+K01(a, b, c, γ, y) = exp(c)*K0p(a+γ, b, y) - exp(-c)*K0p(a-γ, b, y)
 K0p(a, b, y) = ∫D(z->cosh(a+b*z)^y)
 K1p(a, b, y) = ∫D(z->cosh(a+b*z)^y * tanh(a+b*z))
 K2p(a, b, y) = ∫D(z->cosh(a+b*z)^y * tanh(a+b*z)^2)
-K012(a, b, γ, y) = K0(a, b, γ, y), K1(a, b, γ, y), K2(a, b, γ, y)
 
 function oneBPiter!(g::FactorGraphTAP)
-    @extract g N M m ρ mh ρh ξ σ γ y
+    @extract g N M m ρ mh ρh mt ρt mth ρth ξ σ γ y
     # O and Ô are the Onsager rection terms
     # factors update
-    Ctot =0.; Rtot = 0.; R̂tot = 0.; O = 0.; Ô = 0.
-
+    q0 = 0.;q1=0.;qt=0.; s=0.;st=0.
     for i=1:N
-        Ctot += 1 - ρ[i]
-        Rtot += ρ[i] - m[i]^2
-        # O += y*(ρ[i] - m[i]^2) + 1 - m[i]^2
-        O += y*(ρ[i] - m[i]^2) + 1 - ρ[i]
+        q0 += m[i]*m[i]
+        q1 += ρ[i]
+        qt += mt[i]^2
+        s += ρt[i]
+        st += m[i]*mt[i]
     end
-    # println("@ ", Ctot, " ", Rtot, " ", O)
-    @assert Ctot > 0
-    @assert Rtot > 0
+    q1<q0 && (q1=q0; print("!nh "))
+    p = (s-st)^2/(q1-q0)
+    # @assert (q1-q0)*(N-qt)-(s-st)^2 >= 0 "(q1-q0)*(1-qt)-(s-st)^2 > 0 q0=$q0 q1=$q1 qt=$qt s=$s st=$st"
+    # @assert q1>=q0 "q1>q0 q0=$q0 q1=$q1"
+    !isfinite(p) && (p=0.; print("!p "))
 
+    println("q0=$(q0/N) q1=$(q1/N) qt=$(qt/N) s=$(s/N) st=$(st/N)")
+    # if q1>=q0
+    #     print("!")
+    #     # q1 = q0 + 1e-4
+    #     q1 = q0
+        # @assert q1>=q0 "q1>q0 q0=$q0 q1=$q1"
+    # end
+    O = [y*(q1 - q0) + N - q1, s - st] #Onsager Reaction on m, coefficients of mh and mth
+    Õ = [y*(s - st), N - qt]           #Onsager Reaction on mt, coefficients of mh and mth
+
+    Oh = [0.,0.]       #Onsager Reaction on mh, coefficients of m and mt
+    Õh = [0.,0.]       #Onsager Reaction on mth, coefficients of m and mt
     for a=1:M
         Mtot = 0.
+        M̃tot = 0.
         for i=1:N
+            # @assert isapprox(m[i], mt[i], atol=1e-4) "ass i=$i m[i] mt[i],  $(m[i]) $(mt[i])"
             Mtot += ξ[i,a] * m[i]
+            M̃tot += ξ[i,a] * mt[i]
         end
-        Mtot += -mh[a]*O
-        j0, j1, j2 = J012(σ[a]*Mtot/√Ctot, √Rtot/√Ctot, y)
-        # println(j0)
-        @assert isfinite(j0)
-        @assert isfinite(j1)
-        @assert isfinite(j2)
-        j0 <= 0 && (j0=1e-5)
-        j2 <= 0 && (j0=1e-10)
-        mh[a] = σ[a]/√Ctot * j1 / j0
-        ρh[a] = 1/Ctot * j2 / j0
+        Mtot += -mh[a]*O[1] - mth[a]*O[2]
+        M̃tot += -mh[a]*Õ[1] - mth[a]*Õ[2]
+
+        den1 = √(N-q1)
+        den2 = √((N-qt)-p)
+        coeffs = (Mtot/den1, √(q1-q0)/den1,
+                    M̃tot/den2, √p/den2)
+        j00 = J00(coeffs..., y)
+        j10 = J10(coeffs..., y)
+        j20 = J20(coeffs..., y)
+        j01 = J01(coeffs..., y)
+        j02 = J02(coeffs..., y)
+        j11 = J11(coeffs..., y)
+        jd0 = JD0(coeffs..., y)
+        j0d = J0D(coeffs..., y)
+        mh[a] = σ[a]/den1 * j10 / j00
+        ρh[a] = 1/den1^2 * j20 / j00
+        mth[a] = σ[a]/den2 * j01 / j00
+        ρth[a] = 1/(den2*den1) * j11 / j00
+
+        # @assert isapprox(mth[a], mh[a], atol=1e-4) "mh[a] mth[a],  $(mh[a]) $(mth[a])"
+
+        Oh[1] += 1/den1^2 * jd0 / j00
+        Õh[2] += 1/den2^2 * (j02 / j00 + j0d / j00)
+
         @assert isfinite(mh[a])
         @assert isfinite(ρh[a])
-
-        R̂tot += ρh[a] - mh[a]^2
-        jd = - (ρh[a] + 1/(Ctot + Rtot)*(mh[a]*Mtot + (y-1)*ρh[a]*Rtot))
-        # jd = 1/Ctot * JD(σ[a]*Mtot/√Ctot, √Rtot/√Ctot, y) / j0
-        # @assert abs(jd1 - jd) < 1e-5
-        Ô += y*(ρh[a] - mh[a]^2) + jd
     end
-    # println("@ ", R̂tot, " ", Ô)
-    R̂tot <= 0. && (R̂tot=1e-10)
+    q̂0 = 0.;q̂1=0.;q̂t=0.; ŝ=0.;ŝt=0.
+    for a=1:M
+        q̂0 += mh[a]*mh[a]
+        q̂1 += ρh[a]
+        q̂t += mth[a]^2
+        ŝ += ρth[a]
+        ŝt += mh[a]*mth[a]
+    end
+    q̂1<q̂0 && (q̂1=q̂0; print("!h"))
+    @assert q̂1>=q̂0 "q1>=q0 q0=$q0 q1=$q1"
+    println("q̂0=$(q̂0/N) q̂1=$(q̂1/N) q̂t=$(q̂t/N) ŝ=$(ŝ/N) ŝt=$(ŝt/N)")
 
+
+    Oh += [y*(q̂1-q̂0), ŝ-ŝt] # some terms added before
+    Õh += [y*(ŝ-ŝt), -q̂t]
     Δ = 0.
     # variables update
     for i=1:N
         Mtot = 0.
+        M̃tot = 0.
         for a=1:M
             Mtot += ξ[i, a]* mh[a]
+            M̃tot += ξ[i, a]* mth[a]
         end
-        Mtot += - m[i] * Ô
-        k0, k1, k2 = K012(Mtot, √R̂tot, γ, y)
+        Mtot += -m[i]*Oh[1] - mt[i]*Oh[2]
+        M̃tot += -m[i]*Õh[1] - mt[i]*Õh[2]
+
+        coeffs = (Mtot, √(q̂1-q̂0), M̃tot)
+        γeff = ŝ - ŝt + γ
+        k00 = K00(coeffs..., γeff, y)
+        k10 = K10(coeffs..., γeff, y)
+        k20 = K20(coeffs..., γeff, y)
+        k01 = K01(coeffs..., γeff, y)
+        k11 = K11(coeffs..., γeff, y)
         # println(m[i]," ", k0, " ", k1, " ", k2)
         oldm = m[i]
-        m[i] = k1 / k0
-        ρ[i] = k2 / k0
+        oldmt = mt[i]
+
+        m[i] = k10 / k00
+        ρ[i] = k20 / k00
+        mt[i] = k01 / k00
+        ρt[i] = k11 / k00
+        # @assert isapprox(mt[i], m[i], atol=1e-4) "i=$i m[i] mt[i],  $(m[i]) $(mt[i])"
+        @assert isapprox(mt[i], tanh(M̃tot), atol=1e-6) "i=$i m[i] mt[i],  $(m[i]) $(mt[i])"
+
+
         Δ = max(Δ, abs(m[i] - oldm))
+        Δ = max(Δ, abs(mt[i] - oldmt))
         assert(Δ > 0.)
         # println(Δ)
     end
@@ -179,7 +249,7 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
                                 , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
-        print("it=$it ... ")
+        println("it=$it ... ")
         Δ = oneBPiter!(g)
         E = energy(g)
         @printf("r=%.3f γ=%.3f  E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Δ)
@@ -230,6 +300,7 @@ function energy(g::FactorGraphTAP, W::Vector{Int})
     E
 end
 
+#TODO
 function therm_functions(g::FactorGraphTAP)
     @extract g N M m ρ mh ρh ξ σ γ y
     q0 = 1/N * dot(m,m)
@@ -239,37 +310,36 @@ function therm_functions(g::FactorGraphTAP)
     ψ=0.; Σ=0.
 
     ## SIMIL UPDATE PART #############
-    Ctot =0.; Rtot = 0.; R̂tot = 0.; O = 0.; Ô = 0.
-    for i=1:N
-        Ctot += 1 - ρ[i]
-        Rtot += ρ[i] - m[i]^2
-        O += y*(ρ[i] - m[i]^2) + 1 - ρ[i]
-    end
-    for a=1:M
-        Mtot = 0.
-        for i=1:N
-            Mtot += ξ[i,a] * m[i]
-        end
-        Mtot += -mh[a]*O
-        j0 = J0(σ[a]*Mtot/√Ctot, √Rtot/√Ctot, y)
-        R̂tot += ρh[a] - mh[a]^2
-        jd = - (ρh[a] + 1/(Ctot + Rtot)*(mh[a]*Mtot + (y-1)*ρh[a]*Rtot))
-        Ô += y*(ρh[a] - mh[a]^2) + jd
-
-        ψ += log(j0)
-    end
-    for i=1:N
-        Mtot = 0.
-        for a=1:M
-            Mtot += ξ[i, a]* mh[a]
-        end
-        Mtot += - m[i] * Ô
-        k0 = K0(Mtot, √R̂tot, γ, y)
-        ψ += log(k0)
-    end
-    ψ /= N
-    ψ += -0.5y*(y-1)* q̂1*q1 + 0.5y^2*q̂0*q0 -0.5y*q̂1
-    ψ += y * log(2)
+    # Ctot =0.; Rtot = 0.; R̂tot = 0.; O = 0.; Ô = 0.
+    # for i=1:N
+    #     Ctot += 1 - ρ[i]
+    #     Rtot += ρ[i] - m[i]^2
+    #     O += y*(ρ[i] - m[i]^2) + 1 - ρ[i]
+    # end
+    # for a=1:M
+    #     Mtot = 0.
+    #     for i=1:N
+    #         Mtot += ξ[i,a] * m[i]
+    #     end
+    #     Mtot += -mh[a]*O
+    #     j0 = J0(σ[a]*Mtot/√Ctot, √Rtot/√Ctot, y)
+    #     R̂tot += ρh[a] - mh[a]^2
+    #     Ô += y*(ρh[a] - mh[a]^2) - (ρh[a] + 1/(Ctot + Rtot)*(mh[a]*Mtot + (y-1)*ρh[a]*Rtot))
+    #
+    #     ψ += log(j0)
+    # end
+    # for i=1:N
+    #     Mtot = 0.
+    #     for a=1:M
+    #         Mtot += ξ[i, a]* mh[a]
+    #     end
+    #     Mtot += - m[i] * Ô
+    #     k0 = K0(Mtot, √R̂tot, γ, y)
+    #     ψ += log(k0)
+    # end
+    # ψ /= N
+    # ψ += -0.5y*(y-1)* q̂1*q1 + 0.5y^2*q̂0*q0 -0.5y*q̂1
+    # ψ += y * log(2)
     ################
     OrderParams(ψ, 0., 0., 0., 0., q0, q1, 0., q̂0, q̂1, y)
 end
@@ -313,3 +383,5 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters = 10000, ϵ = 1e-4,
             , altsolv=altsolv, altconv=altconv)
     return g, getW(mags(g))
 end
+
+end #module
