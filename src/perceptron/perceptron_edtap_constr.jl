@@ -21,7 +21,9 @@ let s = Dict{Int,Tuple{Vector{Float64},Vector{Float64}}}()
         return (map(Float64, x * √big(2.0)), map(Float64, w / √(big(π))))
     end
 end
-function ∫D(f; n=200)
+
+nint=100 #change by solve
+function ∫D(f; n=nint)
     (xs, ws) = gw(n)
     s = 0.0
     for (x,w) in zip(xs, ws)
@@ -41,6 +43,50 @@ end
 #         isfinite(r) ? r : 0.0
 #     end, interval..., abstol=1e-14,  maxevals=10^10)[1]
 ######################
+type OrderParams
+    m::Float64
+    mt::Float64
+    q0::Float64
+    q1::Float64
+    qt::Float64
+    s::Float64
+    st::Float64
+    m̂::Float64
+    m̂t::Float64
+    q̂0::Float64
+    q̂1::Float64
+    q̂t::Float64
+    ŝ::Float64
+    ŝt::Float64
+end
+OrderParams()=OrderParams(zeros(14)...)
+
+type ThermFunc
+    ϕ::Float64
+    Σext::Float64
+    Σint::Float64
+    E::Float64
+    Ẽ::Float64
+end
+ThermFunc()=ThermFunc(zeros(5)...)
+
+function shortshow(io::IO, x)
+    T = typeof(x)
+    print(io, T.name.name, "(", join([string(f, "=", getfield(x, f)) for f in fieldnames(T)], ","), ")")
+end
+Base.show(io::IO, op::OrderParams) = shortshow(io, op)
+
+function veryshortshow(io::IO, x)
+	T = typeof(x)
+	print(io, join([string(getfield(x, f)) for f in fieldnames(T)], " "))
+end
+
+function reset!(tf::ThermFunc)
+    T = typeof(tf)
+    for f in fieldnames(T)
+        setfield!(tf, f, 0.)
+    end
+end
 
 type FactorGraphTAP
     N::Int
@@ -58,12 +104,16 @@ type FactorGraphTAP
     γ::Float64
     y::Float64
 
+    op::OrderParams
+    tf::ThermFunc
+
     function FactorGraphTAP(ξ::Matrix{Int}, σ::Vector{Int}, γ::Float64, y::Float64)
         N = size(ξ, 1)
         M = length(σ)
         @assert size(ξ, 2) == M
         println("# N=$N M=$M α=$(M/N)")
-        new(N, M, ξ, σ, zeros(N), zeros(N), zeros(N), zeros(N), zeros(M), zeros(M), zeros(M), zeros(M), γ, y)
+        new(N, M, ξ, σ, zeros(N), zeros(N), zeros(N), zeros(N), zeros(M), zeros(M), zeros(M), zeros(M)
+            , γ, y, OrderParams(), ThermFunc())
     end
 end
 
@@ -98,20 +148,24 @@ J02(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-c-d*z)^2)
 J11(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z) * GH(-c-d*z))
 JD0(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * (-GH(-a-b*z)*(a+b*z)-GH(-a-b*z)^2))
 J0D(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * (-GH(-c-d*z)*(c+d*z)-GH(-c-d*z)^2))
+JY(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * log(H(-a-b*z)))
 
 K00(a, b, c, γ, y) = exp(c)*K0p(a+γ, b, y) + exp(-c)*K0p(a-γ, b, y)
 K10(a, b, c, γ, y) = exp(c)*K1p(a+γ, b, y) + exp(-c)*K1p(a-γ, b, y)
 K20(a, b, c, γ, y) = exp(c)*K2p(a+γ, b, y) + exp(-c)*K2p(a-γ, b, y)
 K11(a, b, c, γ, y) = exp(c)*K1p(a+γ, b, y) - exp(-c)*K1p(a-γ, b, y)
 K01(a, b, c, γ, y) = exp(c)*K0p(a+γ, b, y) - exp(-c)*K0p(a-γ, b, y)
+KY(a, b, c, γ, y) = exp(c)*KYp(a+γ, b, y) + exp(-c)*KYp(a-γ, b, y)
 K0p(a, b, y) = ∫D(z->cosh(a+b*z)^y)
 K1p(a, b, y) = ∫D(z->cosh(a+b*z)^y * tanh(a+b*z))
 K2p(a, b, y) = ∫D(z->cosh(a+b*z)^y * tanh(a+b*z)^2)
+KYp(a, b, y) = ∫D(z->cosh(a+b*z)^y * log(cosh(a+b*z)))
 
-function oneBPiter!(g::FactorGraphTAP)
-    @extract g N M m ρ mh ρh mt ρt mth ρth ξ σ γ y
+
+function oneBPiter!(g::FactorGraphTAP, fixmt::Bool)
+    @extract g N M m ρ mh ρh mt ρt mth ρth ξ σ γ y op tf
+    reset!(tf)
     # O and Ô are the Onsager rection terms
-    # factors update
     q0 = 0.;q1=0.;qt=0.; s=0.;st=0.
     for i=1:N
         q0 += m[i]*m[i]
@@ -124,9 +178,10 @@ function oneBPiter!(g::FactorGraphTAP)
     p = (s-st)^2/(q1-q0)
     # @assert (q1-q0)*(N-qt)-(s-st)^2 >= 0 "(q1-q0)*(1-qt)-(s-st)^2 > 0 q0=$q0 q1=$q1 qt=$qt s=$s st=$st"
     # @assert q1>=q0 "q1>q0 q0=$q0 q1=$q1"
-    !isfinite(p) && (p=0.; print("!p "))
+    !isfinite(p) && (p=0.; print("!p1 "))
+    p >= N-qt && (p=N-qt-1e-3; print("!p1 "))
 
-    println("q0=$(q0/N) q1=$(q1/N) qt=$(qt/N) s=$(s/N) st=$(st/N)")
+    # println("q0=$(q0/N) q1=$(q1/N) qt=$(qt/N) s=$(s/N) st=$(st/N)")
     # if q1>=q0
     #     print("!")
     #     # q1 = q0 + 1e-4
@@ -163,8 +218,13 @@ function oneBPiter!(g::FactorGraphTAP)
         j0d = J0D(coeffs..., y)
         mh[a] = σ[a]/den1 * j10 / j00
         ρh[a] = 1/den1^2 * j20 / j00
-        mth[a] = σ[a]/den2 * j01 / j00
+        if !fixmt
+            mth[a] = σ[a]/den2 * j01 / j00
+        end
         ρth[a] = 1/(den2*den1) * j11 / j00
+
+        tf.ϕ += log(j00)
+        tf.Σint += JY(coeffs..., y)/j00
 
         # @assert isapprox(mth[a], mh[a], atol=1e-4) "mh[a] mth[a],  $(mh[a]) $(mth[a])"
 
@@ -184,8 +244,7 @@ function oneBPiter!(g::FactorGraphTAP)
     end
     q̂1<q̂0 && (q̂1=q̂0; print("!h"))
     @assert q̂1>=q̂0 "q1>=q0 q0=$q0 q1=$q1"
-    println("q̂0=$(q̂0/N) q̂1=$(q̂1/N) q̂t=$(q̂t/N) ŝ=$(ŝ/N) ŝt=$(ŝt/N)")
-
+    # println("q̂0=$(q̂0/N) q̂1=$(q̂1/N) q̂t=$(q̂t/N) ŝ=$(ŝ/N) ŝt=$(ŝt/N)")
 
     Oh += [y*(q̂1-q̂0), ŝ-ŝt] # some terms added before
     Õh += [y*(ŝ-ŝt), -q̂t]
@@ -214,17 +273,31 @@ function oneBPiter!(g::FactorGraphTAP)
 
         m[i] = k10 / k00
         ρ[i] = k20 / k00
-        mt[i] = k01 / k00
+        if !fixmt
+            mt[i] = k01 / k00
+        end
         ρt[i] = k11 / k00
         # @assert isapprox(mt[i], m[i], atol=1e-4) "i=$i m[i] mt[i],  $(m[i]) $(mt[i])"
-        @assert isapprox(mt[i], tanh(M̃tot), atol=1e-6) "i=$i m[i] mt[i],  $(m[i]) $(mt[i])"
+        # @assert isapprox(mt[i], tanh(M̃tot), atol=1e-6) "i=$i m[i] mt[i],  $(m[i]) $(mt[i])"
 
+        tf.ϕ += log(k00)
+        tf.Σint += KY(coeffs..., γeff, y)/k00
 
         Δ = max(Δ, abs(m[i] - oldm))
         Δ = max(Δ, abs(mt[i] - oldmt))
         assert(Δ > 0.)
         # println(Δ)
     end
+    q0/=N;q1/=N;qt/=N;s/=N;st/=N; # le hat sono già O(1) q̂0/=M;q̂1/=M;q̂t/=M;ŝ/=M;ŝt/=M
+    g.op = OrderParams(0.,0.,q0,q1,qt,s,st,0.,0.,q̂0,q̂1,q̂t,ŝ,ŝt)
+    tf.ϕ /= N
+    tf.ϕ += -0.5y*(y-1)* op.q̂1*q1 + 0.5y^2*q̂0*q0 -0.5y*q̂1 + 0.5q̂t*qt - 0.5q̂t
+    tf.ϕ += -y*(s*ŝ - st*ŝt)
+    tf.ϕ += y * log(2)
+    tf.Σint /= N
+    tf.Σint += -(y-0.5)* q̂1*q1 + y*q̂0*q0 -0.5q̂1 +log(2)
+    tf.Σint += -(s*ŝ - st*ŝt) - γ*s
+
     Δ
 end
 #
@@ -245,51 +318,32 @@ end
 getW(mags::Vector) = Int[1-2signbit(m) for m in mags]
 
 function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
-                                , altsolv::Bool=false, altconv = false
+                                , altsolv::Bool=false, altconv = false, fixmt=false
                                 , reinfpar::ReinfParams=ReinfParams())
 
+    ok = false
     for it=1:maxiters
-        println("it=$it ... ")
-        Δ = oneBPiter!(g)
+        print("it=$it ...")
+        Δ = oneBPiter!(g,fixmt)
         E = energy(g)
         @printf("r=%.3f γ=%.3f  E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Δ)
+        println(g.op)
+        println(g.tf)
         update_reinforcement!(reinfpar)
         g.γ=reinfpar.γ; g.y=reinfpar.r
         if altsolv && E == 0
             println("Found Solution!")
+            ok = true
             break
         end
         if altconv && Δ < ϵ
             println("Converged!")
+            ok = true
             break
         end
     end
+    return ok
 end
-
-### Thermodinamic Functions ##########
-type OrderParams
-    Ψ::Float64
-    Σext::Float64
-    Σint::Float64
-    S::Float64
-    Ẽ::Float64
-    q₀::Float64
-    q₁::Float64
-    q̃::Float64
-    q̂₀::Float64
-    q̂₁::Float64
-    δq::Float64
-    δq̂::Float64
-    function OrderParams(Ψ, Σext, Σint, S, Ẽ, q₀, q₁, q̃, q̂₀, q̂₁, y)
-        new(Ψ, Σext, Σint, S, Ẽ, q₀, q₁, q̃, q̂₀, q̂₁, (q₁ - q₀) * y, (q̂₁ - q̂₀) * y)
-    end
-end
-function shortshow(io::IO, x)
-    T = typeof(x)
-    print(io, T.name.name, "(", join([string(f, "=", getfield(x, f)) for f in fieldnames(T)], ","), ")")
-end
-Base.show(io::IO, op::OrderParams) = shortshow(io, op)
-
 
 function energy(g::FactorGraphTAP, W::Vector{Int})
     @extract g M σ ξ
@@ -300,53 +354,7 @@ function energy(g::FactorGraphTAP, W::Vector{Int})
     E
 end
 
-#TODO
-function therm_functions(g::FactorGraphTAP)
-    @extract g N M m ρ mh ρh ξ σ γ y
-    q0 = 1/N * dot(m,m)
-    q1 = 1/N * sum(ρ)
-    q̂0 = dot(mh,mh)
-    q̂1 = sum(ρh)
-    ψ=0.; Σ=0.
-
-    ## SIMIL UPDATE PART #############
-    # Ctot =0.; Rtot = 0.; R̂tot = 0.; O = 0.; Ô = 0.
-    # for i=1:N
-    #     Ctot += 1 - ρ[i]
-    #     Rtot += ρ[i] - m[i]^2
-    #     O += y*(ρ[i] - m[i]^2) + 1 - ρ[i]
-    # end
-    # for a=1:M
-    #     Mtot = 0.
-    #     for i=1:N
-    #         Mtot += ξ[i,a] * m[i]
-    #     end
-    #     Mtot += -mh[a]*O
-    #     j0 = J0(σ[a]*Mtot/√Ctot, √Rtot/√Ctot, y)
-    #     R̂tot += ρh[a] - mh[a]^2
-    #     Ô += y*(ρh[a] - mh[a]^2) - (ρh[a] + 1/(Ctot + Rtot)*(mh[a]*Mtot + (y-1)*ρh[a]*Rtot))
-    #
-    #     ψ += log(j0)
-    # end
-    # for i=1:N
-    #     Mtot = 0.
-    #     for a=1:M
-    #         Mtot += ξ[i, a]* mh[a]
-    #     end
-    #     Mtot += - m[i] * Ô
-    #     k0 = K0(Mtot, √R̂tot, γ, y)
-    #     ψ += log(k0)
-    # end
-    # ψ /= N
-    # ψ += -0.5y*(y-1)* q̂1*q1 + 0.5y^2*q̂0*q0 -0.5y*q̂1
-    # ψ += y * log(2)
-    ################
-    OrderParams(ψ, 0., 0., 0., 0., q0, q1, 0., q̂0, q̂1, y)
-end
-
 energy(g::FactorGraphTAP) = energy(g, getW(mags(g)))
-
-mag(g::FactorGraphTAP, i::Integer) = g.m[i]
 
 mags(g::FactorGraphTAP) = g.m
 # mags_noreinf(g::FactorGraphTAP) = Float64[mag_noreinf(v) for v in g.vnodes]
@@ -383,5 +391,57 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters = 10000, ϵ = 1e-4,
             , altsolv=altsolv, altconv=altconv)
     return g, getW(mags(g))
 end
+
+function exclusive(f::Function, fn::AbstractString = "lock.tmp")
+	run(`lockfile -1 $fn`)
+	try
+		f()
+	finally
+		run(`rm -f $fn`)
+	end
+end
+
+function span(;N=2001, lstα = 0.5, lstγ = 0., n=100, y=0.,
+	ϵ = 1e-4, maxiters = 100, seed = -1,
+	resfile = "perc_edtap_constr.new.txt")
+
+	global nint = n
+    seed > 0 && srand(seed)
+	results = Any[]
+	lockfile = "reslock.tmp"
+
+	for α in lstα
+        M = round(Int, α * N)
+        ξt = Vector{Int}[rand(-1.0:2.0:1.0, N) for a = 1:M]
+        ξ = hcat(ξt...)
+        σ = ones(Int, M)
+        g = FactorGraphTAP(ξ, σ, 0., y)
+        initrand!(g)
+        reinfpar = ReinfParams(y, 0., 0., 0.)
+        ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false, altconv=true,reinfpar=reinfpar)
+        @assert ok
+        for γ in lstγ
+            g.γ=γ
+            reinfpar.γ=γ
+            println("\n#####  NEW ITER  ###############\n")
+			ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false, altconv=true, fixmt=true, reinfpar=reinfpar)
+            # ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false, altconv=true, fixmt=true, reinfpar=reinfpar)
+
+            push!(results, (ok, deepcopy(g.op), deepcopy(g.tf)))
+            # verb > 0 &&   println(tf)
+            if ok
+                exclusive(lockfile) do
+                    open(resfile, "a") do rf
+                        veryshortshow(rf, g.tf); print(rf, " ")
+                        veryshortshow(rf, g.op); print(rf,"\n")
+                    end
+                end
+            end
+            ok || break
+		end
+	end
+	return results
+end
+
 
 end #module

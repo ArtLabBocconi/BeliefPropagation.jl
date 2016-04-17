@@ -15,17 +15,19 @@ typealias VecVecVec Vector{VecVec}
 typealias IVecVecVec Vector{IVecVec}
 
 include("layers.jl")
+include("dropout.jl")
 
 type FactorGraph
     K::Vector{Int} # dimension of hidden layers
     M::Int
-    L::Int         # number of hidden layers
+    L::Int         # number of hidden layers. L=length(layers)-2
     ξ::Matrix{Float64}
     σ::Vector{Int}
     layers::Vector{AbstractLayer}
+    dropout::Dropout
 
     function FactorGraph(ξ::Matrix{Float64}, σ::Vector{Int}
-                , K::Vector{Int}, layertype::Vector{Symbol}; βms = 1.,rms =1.)
+                , K::Vector{Int}, layertype::Vector{Symbol}; βms = 1.,rms =1., ndrops=0)
         N, M = size(ξ)
         @assert length(σ) == M
         println("# N=$N M=$M α=$(M/N)")
@@ -62,7 +64,9 @@ type FactorGraph
             chain!(layers[l], layers[l+1])
         end
 
-        new(K, M, L, ξ, σ, layers)
+        dropout = Dropout()
+        add_rand_drops!(dropout, 3, K[2], M, ndrops)
+        new(K, M, L, ξ, σ, layers, dropout)
     end
 end
 
@@ -100,14 +104,11 @@ function fixtopbottom!(g::FactorGraph)
 end
 
 function update!(g::FactorGraph, r::Float64, ry::Float64)
-    Δ = 0.
-    for lay in g.layers[2:end-1]
-        # println("# Updating layer $(lay.l)")
-        # for n=1:g.L-(lay.l-1)
-        # for n=1:lay.l-1
-            δ = update!(lay, r, ry)
-            Δ = max(δ, Δ)
-        # end
+    Δ = 0.# Updating layer $(lay.l)")
+    for l=2:g.L
+        dropout!(g, l+1)
+        δ = update!(g.layers[l], r, ry)
+        Δ = max(δ, Δ)
     end
     return Δ
 end
@@ -173,6 +174,15 @@ function plot_info(g::FactorGraph, info=1)
         end
         info == 5 && continue
 
+    end
+end
+
+function dropout!(g::FactorGraph, level::Int)
+    @extract g : dropout layers
+    !haskey(dropout.drops[level]) && return
+    pd = layers[level].allpd
+    for (k, μ) in dropout.drops[level]
+        pd[k,μ] = 0.5
     end
 end
 
@@ -308,13 +318,13 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 ry::Float64 = 0., ry_step::Float64= 0.0,
                 altsolv::Bool = true, altconv::Bool = false,
                 seed::Int = -1, plotinfo=-1,
-                βms = 1., rms = 1.)
+                βms = 1., rms = 1., ndrops = 0)
 
     # for l=1:length(K)
     #     @assert K[l] % 2 == 1
     # end
     seed > 0 && srand(seed)
-    g = FactorGraph(ξ, σ, K, layers, βms = βms, rms = rms)
+    g = FactorGraph(ξ, σ, K, layers, βms=βms, rms=rms, ndrops=ndrops)
     initrand!(g)
     fixtopbottom!(g)
     reinfpar = ReinfParams(r, r_step, ry, ry_step)
