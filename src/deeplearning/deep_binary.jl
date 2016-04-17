@@ -105,7 +105,7 @@ end
 
 function update!(g::FactorGraph, r::Float64, ry::Float64)
     Δ = 0.# Updating layer $(lay.l)")
-    for l=2:g.L
+    for l=2:g.L+1
         dropout!(g, l+1)
         δ = update!(g.layers[l], r, ry)
         Δ = max(δ, Δ)
@@ -179,10 +179,10 @@ end
 
 function dropout!(g::FactorGraph, level::Int)
     @extract g : dropout layers
-    !haskey(dropout.drops[level]) && return
+    !haskey(dropout.drops, level) && return
     pd = layers[level].allpd
     for (k, μ) in dropout.drops[level]
-        pd[k,μ] = 0.5
+        pd[k][μ] = 0.5
     end
 end
 
