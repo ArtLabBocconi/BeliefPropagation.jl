@@ -268,6 +268,14 @@ function updateFact!(layer::BPLayer, k::Int)
                 mhy[i][a] = myatanh(m[i]/Ccav * GH(pd[a],-Mcav / Ccav))
             end
         end
+
+        if !istoplayer(layer)
+            pu = allpu[k]
+            pu[a] = 1-H(-Mhtot / √Chtot)
+            # @assert isfinite(pu[a])
+            pu[a] < 0 && (pu[a]=1e-8)
+            pu[a] > 1 && (pu[a]=1-1e-8)
+        end
     end
 end
 

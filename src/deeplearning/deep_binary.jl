@@ -130,7 +130,7 @@ function plot_info(g::FactorGraph, info=1)
         for k=1:K[l+1]
             push!(q0, dot(layers[l].allm[k],layers[l].allm[k])/K[l])
         end
-        println("q0=$q0")
+        println("lyer $l q0=$q0")
         info == 0 && continue
 
         subplot(L,width,width*(L-l)+1)
