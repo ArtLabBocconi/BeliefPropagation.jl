@@ -301,7 +301,7 @@ function updateFact!(layer::TapLayer, k::Int)
 
         if !istoplayer(layer)
             pu = allpu[k]
-            pu[a] = 1-H(-Mhtot / √Chtot)
+            pu[a] = H(-Mhtot / √Chtot)
             # @assert isfinite(pu[a])
             pu[a] < 0 && (pu[a]=1e-8)
             pu[a] > 1 && (pu[a]=1-1e-8)
@@ -324,7 +324,7 @@ function updateVarW!{L <: Union{TapLayer,TapExactLayer}}(layer::L, k::Int, r::Fl
         # i==1 && println("h $(h[i]) r $r")
         h[i] = Mt[i] + m[i] * Ct[k] + r*h[i]
         oldm = m[i]
-        m[i] = tanh(h[i])
+        m[i] = 0.8*tanh(h[i]) +0.2*oldm
         Δ = max(Δ, abs(m[i] - oldm))
     end
     return Δ

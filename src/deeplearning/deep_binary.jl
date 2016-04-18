@@ -130,19 +130,21 @@ function plot_info(g::FactorGraph, info=1)
         for k=1:K[l+1]
             push!(q0, dot(layers[l].allm[k],layers[l].allm[k])/K[l])
         end
-        println("lyer $l q0=$q0")
+        qWαβ = Float64[]
+        for k=1:K[l+1]
+            for p=k+1:K[l+1]
+                # push!(q, dot(W[l][k],W[l][p])/K[l])
+                push!(qWαβ, dot(layers[l].allm[k],layers[l].allm[p]) / sqrt(q0[k]*q0[p])/K[l])
+            end
+        end
+        println("layer $l q0=$q0")
+        println("layer $l qWαβ=$qWαβ")
+
         info == 0 && continue
 
         subplot(L,width,width*(L-l)+1)
         title("W Overlaps Layer $l")
         xlim(-1.01,1.01)
-        q = Float64[]
-        for k=1:K[l+1]
-            for p=k+1:K[l+1]
-                # push!(q, dot(W[l][k],W[l][p])/K[l])
-                push!(q, dot(layers[l].allm[k],layers[l].allm[p]) / sqrt(q0[k]*q0[p])/K[l])
-            end
-        end
         plt[:hist](q)
         info == 1 && continue
 

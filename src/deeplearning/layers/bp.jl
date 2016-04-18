@@ -271,7 +271,7 @@ function updateFact!(layer::BPLayer, k::Int)
 
         if !istoplayer(layer)
             pu = allpu[k]
-            pu[a] = 1-H(-Mhtot / √Chtot)
+            pu[a] = H(-Mhtot / √Chtot)
             # @assert isfinite(pu[a])
             pu[a] < 0 && (pu[a]=1e-8)
             pu[a] > 1 && (pu[a]=1-1e-8)
