@@ -19,6 +19,12 @@ function GH(p, x)
     Gp = G(x); Gm = Gp
     (p*Gp - (1-p)*Gm) / (p*Hp + (1-p)*Hm)
 end
+# GH(1,x) =GH(x)
+function GH2(p, x)
+    Hp = H(x); Hm = 1-Hp
+    Gp = G(x); Gm = Gp
+    Gp / (p*Hp + (1-p)*Hm)
+end
 
 # function DH(p, x, y, C)
 #     Hpp = H(-(x+y)/C)

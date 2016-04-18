@@ -285,7 +285,9 @@ function updateFact!(layer::TapLayer, k::Int)
         end
         @assert isfinite(mh[a])
 
+        # c=0.
         c = mh[a] * (Mhtot / Chtot + mh[a])
+        # c = Mhtot*GH2(pd[a], -Mhtot / √Chtot) / Chtot + mh[a]*mh[a]
         Ct[k] += c
         if !isbottomlayer(layer)
             CYt[a] += c

@@ -124,15 +124,23 @@ function plot_info(g::FactorGraph, info=1)
     N = length(W[1][1])
     layers = g.layers[2:end-1]
     width = info
-    clf()
+    info > 0 && clf()
     for l=1:L
+        q0 = Float64[]
+        for k=1:K[l+1]
+            push!(q0, dot(layers[l].allm[k],layers[l].allm[k])/K[l])
+        end
+        println("q0=$q0")
+        info == 0 && continue
+
         subplot(L,width,width*(L-l)+1)
         title("W Overlaps Layer $l")
         xlim(-1.01,1.01)
         q = Float64[]
         for k=1:K[l+1]
             for p=k+1:K[l+1]
-                push!(q, dot(W[l][k],W[l][p])/K[l])
+                # push!(q, dot(W[l][k],W[l][p])/K[l])
+                push!(q, dot(layers[l].allm[k],layers[l].allm[p]) / sqrt(q0[k]*q0[p])/K[l])
             end
         end
         plt[:hist](q)
@@ -195,7 +203,7 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
         E, h = energy(g)
         @printf("it=%d  r=%.3f ry=%.3f E=%d   \tΔ=%f \n", it, reinfpar.r, reinfpar.ry, E, Δ)
         # println(h)
-        plotinfo > 0  && plot_info(g, plotinfo)
+        plotinfo >=0  && plot_info(g, plotinfo)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
             println("Found Solution!")
