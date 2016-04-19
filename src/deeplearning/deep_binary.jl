@@ -289,14 +289,15 @@ function solveTS(; K::Vector{Int} = [101,3], α::Float64=0.6
     # ξ = (2rand(K[1], M) - 1)
     W = randTeacher(K)
     σ = Int[(res = forward(W, ξ[:,a]); res[1][1]) for a=1:M]
-    @assert size(ξ) == (N, M)
-    # println("Mean Overlap ξ $(meanoverlap(ξ))")
-    g, getW(mags(g)), E, stab = solve(ξ, σ; K=K, kw...)
+    # @assert size(ξ) == (N, M)
+    # # println("Mean Overlap ξ $(meanoverlap(ξ))")
+    # g, Wnew, E, stab = solve(ξ, σ; K=K, kw...)
+    #
+    # reinfpar = ReinfParams(r, r_step, ry, ry_step)
 
-    reinfpar = ReinfParams(r, r_step, ry, ry_step)
-
-    converge!(g, maxiters=maxiters, ϵ=1e-5, reinfpar=reinfpar,
-            altsolv=false, altconv=altconv, plotinfo=plotinfo)
+    # converge!(g, maxiters=maxiters, ϵ=1e-5, reinfpar=reinfpar,
+    #         altsolv=false, altconv=altconv, plotinfo=plotinfo)
+    solve(ξ, σ; K=K, kw...)
 end
 
 function solve(; K::Vector{Int} = [101,3], α::Float64=0.6
