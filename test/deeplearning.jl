@@ -19,7 +19,7 @@ for lay in [:tap,:bp]
 end
 
 #### COMMITTEE
-for lay in [:tapex,:bpex]
+for lay in [:tapex, :bpex]
     @time g, W, E, stab = DeepBinary.solve(α=0.2, K=[1001,7,1]
                 , layers=[:tap,lay]
                 ,r=.8,r_step=0.01, seedξ=1,maxiters=500);
