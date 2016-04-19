@@ -262,6 +262,43 @@ function meanoverlap(ξ::Matrix)
     return q / N / (0.5*M*(M-1))
 end
 
+function randTeacher(K::Vector{Int})
+    L = length(K)-1
+    W = Vector{Vector{Vector{Int}}}()
+    for l=1:L
+        push!(W, Vector{Vector{Int}}())
+        for k=1:K[l+1]
+            push!(W[l], rand(Int[-1,1], K[l]))
+        end
+    end
+    if L > 1
+        W[L][1][:] = 1
+    end
+    return W
+end
+
+function solveTS(; K::Vector{Int} = [101,3], α::Float64=0.6
+            , seedξ::Int=-1
+            , kw...)
+    seedξ > 0 && srand(seedξ)
+    numW = length(K)==2 ? K[1]*K[2]  : sum(l->K[l]*K[l+1],1:length(K)-2)
+    N = K[1]
+    ξ = zeros(K[1], 1)
+    M = round(Int, α * numW)
+    ξ = rand([-1.,1.], K[1], M)
+    # ξ = (2rand(K[1], M) - 1)
+    W = randTeacher(K)
+    σ = Int[(res = forward(W, ξ[:,a]); res[1][1]) for a=1:M]
+    @assert size(ξ) == (N, M)
+    # println("Mean Overlap ξ $(meanoverlap(ξ))")
+    g, getW(mags(g)), E, stab = solve(ξ, σ; K=K, kw...)
+
+    reinfpar = ReinfParams(r, r_step, ry, ry_step)
+
+    converge!(g, maxiters=maxiters, ϵ=1e-5, reinfpar=reinfpar,
+            altsolv=false, altconv=altconv, plotinfo=plotinfo)
+end
+
 function solve(; K::Vector{Int} = [101,3], α::Float64=0.6
             , seedξ::Int=-1
             , dξ::Vector{Float64} = Float64[], nξ::Vector{Int} = Int[]
