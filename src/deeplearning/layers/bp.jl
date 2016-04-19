@@ -318,8 +318,8 @@ function updateVarY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::Fl
         hy[i] = sum(mhy) + ry* hy[i]
         @assert isfinite(hy[i]) "isfinite(hy[i]) mhy=$mhy"
         allpd[i][a] = (1+tanh(hy[i])) / 2
-        (allpd[i][a] <= 0.) && (allpd[i][a] = 1e-10)
-        (allpd[i][a] >= 1.) && (allpd[i][a] = 1-1e-10)
+        (allpd[i][a] < 0.) && (print("!y");allpd[i][a] = 1e-10)
+        (allpd[i][a] > 1.) && (print("!y");allpd[i][a] = 1-1e-10)
         @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
         # pinned from below (e.g. from input layer)
         if pu > 1-1e-10 || pu < 1e-10
