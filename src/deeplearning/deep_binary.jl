@@ -116,6 +116,13 @@ end
 getW(mags::VecVecVec) = [[Float64[1-2signbit(m) for m in magk]
                         for magk in magsl] for magsl in mags]
 
+function printvec(q::Vector{Float64}, head = "")
+    print(head)
+    for e in q
+        @printf("%.6f ", e)
+    end
+    println()
+end
 function plot_info(g::FactorGraph, info=1)
     m = mags(g)
     W = getW(m)
@@ -137,8 +144,8 @@ function plot_info(g::FactorGraph, info=1)
                 push!(qWαβ, dot(layers[l].allm[k],layers[l].allm[p]) / sqrt(q0[k]*q0[p])/K[l])
             end
         end
-        println("layer $l q0=$q0")
-        println("layer $l qWαβ=$qWαβ")
+        printvec(q0,"layer $l q0=")
+        printvec(qWαβ,"layer $l qWαβ=")
 
         info == 0 && continue
 
@@ -203,7 +210,7 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
     for it=1:maxiters
         Δ = update!(g, reinfpar.r, reinfpar.ry)
         E, h = energy(g)
-        @printf("it=%d  r=%.3f ry=%.3f E=%d   \tΔ=%f \n", it, reinfpar.r, reinfpar.ry, E, Δ)
+        @printf("it=%d \t r=%.3f ry=%.3f \t E=%d \t Δ=%f \n", it, reinfpar.r, reinfpar.ry, E, Δ)
         # println(h)
         plotinfo >=0  && plot_info(g, plotinfo)
         update_reinforcement!(reinfpar)
