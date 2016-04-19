@@ -218,28 +218,30 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
     end
 end
 
+function forward{T}(W::Vector{Vector{Vector{T}}}, ξ::Vector)
+    L=length(W)
+    K = [length(W[1][1]); map(length, W)]
+    σks = deepcopy(ξ)
+    stabilities = zeros(K[L])
+    for l=1:L
+        if l==L
+            stabilities = map(w->dot(σks, w), W[L])
+        end
+        σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
+    end
+
+    return σks, stabilities
+end
+
 function energy{T}(g::FactorGraph, W::Vector{Vector{Vector{T}}})
     @extract g M K σ ξ
     L=length(W)
     E = 0
     stabilities = zeros(M)
     for a=1:M
-        σks = ξ[:,a]
-        for l=1:L
-            l==L && (stabilities[a] = dot(σks, W[L][1]))
-            σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
-        end
-        if K[end] == 1
-            E += σ[a] * sum(σks) > 0 ? 0 : 1
-        else
-            for k=1:K[end]
-                sat = σ[a]==k ? σks[k]==1 : σks[k]==-1
-                if !sat
-                    E += 1
-                    break
-                end
-            end
-        end
+        σks, stab = forward(W, ξ[:,a])
+        stabilities[a] = sum(stab)
+        E += all((σ[a] .* σks) .> 0) ? 0 : 1
     end
 
     E, stabilities

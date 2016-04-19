@@ -324,7 +324,8 @@ function updateVarW!{L <: Union{TapLayer,TapExactLayer}}(layer::L, k::Int, r::Fl
         # i==1 && println("h $(h[i]) r $r")
         h[i] = Mt[i] + m[i] * Ct[k] + r*h[i]
         oldm = m[i]
-        m[i] = 0.5*tanh(h[i]) +0.5*oldm
+        dump = 0.
+        m[i] = (1-dump)*tanh(h[i]) + dump*oldm
         Δ = max(Δ, abs(m[i] - oldm))
     end
     return Δ
