@@ -1,6 +1,7 @@
 module PF
 using MacroUtils
 using FastGaussQuadrature
+using JLD
 
 G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
@@ -91,7 +92,7 @@ end
 type FactorGraphTAP
     N::Int
     M::Int
-    ξ::Matrix{Int}
+    ξ::Matrix{Float64}
     σ::Vector{Int}
     m::Vector{Float64}
     mt::Vector{Float64}
@@ -107,7 +108,7 @@ type FactorGraphTAP
     op::OrderParams
     tf::ThermFunc
 
-    function FactorGraphTAP(ξ::Matrix{Int}, σ::Vector{Int}, γ::Float64, y::Float64)
+    function FactorGraphTAP(ξ::Matrix{Float64}, σ::Vector{Int}, γ::Float64, y::Float64)
         N = size(ξ, 1)
         M = length(σ)
         @assert size(ξ, 2) == M
@@ -162,7 +163,7 @@ K2p(a, b, y) = ∫D(z->cosh(a+b*z)^y * tanh(a+b*z)^2)
 KYp(a, b, y) = ∫D(z->cosh(a+b*z)^y * log(cosh(a+b*z)))
 
 
-function oneBPiter!(g::FactorGraphTAP, fixmt::Bool)
+function oneBPiter!(g::FactorGraphTAP, fixmt::Bool; dump=0.)
     @extract g N M m ρ mh ρh mt ρt mth ρth ξ σ γ y op tf
     reset!(tf)
     # O and Ô are the Onsager rection terms
@@ -206,8 +207,8 @@ function oneBPiter!(g::FactorGraphTAP, fixmt::Bool)
 
         den1 = √(N-q1)
         den2 = √((N-qt)-p)
-        coeffs = (Mtot/den1, √(q1-q0)/den1,
-                    M̃tot/den2, √p/den2)
+        coeffs = (σ[a]*Mtot/den1, √(q1-q0)/den1,
+                    σ[a]*M̃tot/den2, √p/den2)
         j00 = J00(coeffs..., y)
         j10 = J10(coeffs..., y)
         j20 = J20(coeffs..., y)
@@ -271,12 +272,12 @@ function oneBPiter!(g::FactorGraphTAP, fixmt::Bool)
         oldm = m[i]
         oldmt = mt[i]
 
-        m[i] = k10 / k00
-        ρ[i] = k20 / k00
+        m[i] = (1-dump)*(k10 / k00) + dump*oldm
+        ρ[i] = (1-dump)*(k20 / k00) + dump*ρ[i]
         if !fixmt
-            mt[i] = k01 / k00
+            mt[i] = (1-dump)*(k01 / k00) + dump*oldmt
         end
-        ρt[i] = k11 / k00
+        ρt[i] = (1-dump)*(k11 / k00)  + dump*ρt[i]
         # @assert isapprox(mt[i], m[i], atol=1e-4) "i=$i m[i] mt[i],  $(m[i]) $(mt[i])"
         # @assert isapprox(mt[i], tanh(M̃tot), atol=1e-6) "i=$i m[i] mt[i],  $(m[i]) $(mt[i])"
 
@@ -319,12 +320,13 @@ getW(mags::Vector) = Int[1-2signbit(m) for m in mags]
 
 function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
                                 , altsolv::Bool=false, altconv = false, fixmt=false
-                                , reinfpar::ReinfParams=ReinfParams())
+                                , reinfpar::ReinfParams=ReinfParams()
+                                , dump = 0.)
 
     ok = false
     for it=1:maxiters
         print("it=$it ...")
-        Δ = oneBPiter!(g,fixmt)
+        Δ = oneBPiter!(g, fixmt, dump=dump)
         E = energy(g)
         @printf("r=%.3f γ=%.3f  E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Δ)
         println(g.op)
@@ -365,14 +367,12 @@ function solve(; N::Int=1000, α = 0.6, seed_ξ = -1, kw...)
         srand(seed_ξ)
     end
     M = round(Int, α * N)
-    ξt = Vector{Int}[rand(-1.0:2.0:1.0, N) for a = 1:M]
-    # ξ = rand([-1,1], N, M)
-    ξ = hcat(ξt...)
+    ξ = rand([-1.,1.], N, M)
     σ = ones(Int, M)
     solve(ξ, σ; kw...)
 end
 
-function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters = 10000, ϵ = 1e-4,
+function solve(ξ::Matrix{Float64}, σ::Vector{Int}; maxiters = 10000, ϵ = 1e-4,
                 method = :reinforcement, #[:reinforcement, :decimation]
                 y = 0., y_step = 0.001,
                 γ = 0., γ_step = 0.,
@@ -412,8 +412,7 @@ function span(;N=2001, lstα = 0.5, lstγ = 0., n=100, y=0.,
 
 	for α in lstα
         M = round(Int, α * N)
-        ξt = Vector{Int}[rand(-1.0:2.0:1.0, N) for a = 1:M]
-        ξ = hcat(ξt...)
+        ξ = rand([-1.,1.], N, M)
         σ = ones(Int, M)
         g = FactorGraphTAP(ξ, σ, 0., y)
         initrand!(g)
@@ -424,14 +423,14 @@ function span(;N=2001, lstα = 0.5, lstγ = 0., n=100, y=0.,
             g.γ=γ
             reinfpar.γ=γ
             println("\n#####  NEW ITER  ###############\n")
-			ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false, altconv=true, fixmt=true, reinfpar=reinfpar)
-            # ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false, altconv=true, fixmt=true, reinfpar=reinfpar)
+			ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false,
+                altconv=true, fixmt=true, reinfpar=reinfpar)
 
             push!(results, (ok, deepcopy(g.op), deepcopy(g.tf)))
-            # verb > 0 &&   println(tf)
             if ok
                 exclusive(lockfile) do
                     open(resfile, "a") do rf
+                        print(rf, "$α $γ $y 0 ")
                         veryshortshow(rf, g.tf); print(rf, " ")
                         veryshortshow(rf, g.op); print(rf,"\n")
                     end
@@ -443,5 +442,63 @@ function span(;N=2001, lstα = 0.5, lstγ = 0., n=100, y=0.,
 	return results
 end
 
+include("../deeplearning/deep_binary.jl")
+function span_committe(;K=[301,5], α = 0.2, lstγ = 0., n=100, y=0.
+        , ϵ = 1e-4, maxiters = 200, seedξ = -1, resfile = "pf_committee.new.txt"
+        , ry = 0.3, ry_step = 0.01, dump=0.
+        , loadξτ = "", saveξτ = "")
+	global nint = n
+    @assert length(K) == 3
+	results = Any[]
+	lockfile = "reslock.tmp"
+
+    if loadξτ == ""
+        seedξ > 0 && srand(seedξ)
+        numW = length(K)==2 ? K[1]*K[2]  : sum(l->K[l]*K[l+1],1:length(K)-2)
+        N = K[1]
+        M = round(Int, α * numW)
+        ξ = rand([-1.,1.], N, M)
+        σ = ones(Int, M)
+        g_deep, W_deep, E_deep, _ = DeepBinary.solve(ξ, σ; K=K,layers=[:tap,:bpex]
+                           , ry=0.3, ry_step=ry_step, r_step=0., ϵ=1e-5
+                           , plotinfo=0, maxiters=20000, altsolv=false, altconv=true)
+        τ = [Int[convert(Int, sign(g_deep.layers[3].allmy[a][k])) for a=1:M] for k=1:K[2]]
+        if saveξτ != ""
+            save(saveξτ, "ξ", ξ, "τ", τ, "seedξ", seedξ
+                , "ry", ry, "ry_step", ry_step)
+        end
+    else
+        d = load(loadξτ)
+        ξ=d["ξ"]; τ=d["τ"];
+        N, M = size(ξ)
+    end
+    for k=1:K[1]
+        println("@@ Perceptron $k")
+        @assert length(τ[k]) == M
+        g = FactorGraphTAP(ξ, τ[k], 0., y)
+        initrand!(g)
+        reinfpar = ReinfParams(y, 0., 0., 0.)
+        ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false, altconv=true,reinfpar=reinfpar, dump=dump)
+        @assert ok
+        for γ in lstγ
+            g.γ=γ
+            reinfpar.γ=γ
+            println("\n#####  NEW ITER  ###############\n")
+            ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false, altconv=true, fixmt=true, reinfpar=reinfpar)
+            push!(results, (ok, deepcopy(g.op), deepcopy(g.tf)))
+            if ok
+                exclusive(lockfile) do
+                    open(resfile, "a") do rf
+                        print(rf, "$α $γ $y $k   ")
+                        veryshortshow(rf, g.tf); print(rf, " ")
+                        veryshortshow(rf, g.op); print(rf,"\n")
+                    end
+                end
+            end
+            ok || break
+        end
+    end
+    return results
+end
 
 end #module
