@@ -1,0 +1,21 @@
+set term postscript eps enhanced color dashed "Helvetica" 16
+set colors classic
+
+set output "committee_N301_K5_α04.eps"
+set ylabel "Local Entropy (y=0)"
+set xlabel "distance d"
+set xr[0:]
+#set yr[-0.01:]
+f0(x)=-x*log(x) - (1-x)*log(1-x)
+#plot 	"<cat ../../pf_committee.new.txt" u (0.5*(1-$13)):7 lc 7  w lp not ,\
+#		 f0(x) t "alpha=0",\
+#		 0 ls 0 not
+
+set output "perc_N2001_α06.eps"
+set ylabel "Local Entropy (y=0)"
+set xlabel "distance d"
+set xr[0:]
+#set yr[-0.01:]
+plot 	"<cat ../../perc_edtap_constr.new.txt" u (0.5*(1-$13)):7 lc 7  w lp not ,\
+		f0(x) t "alpha=0",\
+		 0 ls 0 not
