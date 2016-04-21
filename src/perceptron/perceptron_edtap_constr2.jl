@@ -147,10 +147,11 @@ function initrand!(g::FactorGraphTAP)
 end
 
 ### Update functions
-J00(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z))
-J10(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z))
+J00(a, b, c, d, y) = y == 0 ? H(-c/√(1+d^2)) :
+                    ∫D(z->H(-a-b*z)^y * H(-c-d*z))
+J10(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z)) #TODO version a y=0
 J20(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z)^2)
-J01(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-c-d*z))
+J01(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-c-d*z)) #TODO version a y=0
 J02(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-c-d*z)^2)
 J11(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * GH(-a-b*z) * GH(-c-d*z))
 JD0(a, b, c, d, y) = ∫D(z->H(-a-b*z)^y * H(-c-d*z) * (-GH(-a-b*z)*(a+b*z)-GH(-a-b*z)^2))
@@ -163,16 +164,16 @@ K20(a, b, c, γ, y) = exp(c)*K2p(a+γ, b, y) + exp(-c)*K2p(a-γ, b, y)
 K11(a, b, c, γ, y) = exp(c)*K1p(a+γ, b, y) - exp(-c)*K1p(a-γ, b, y)
 K01(a, b, c, γ, y) = exp(c)*K0p(a+γ, b, y) - exp(-c)*K0p(a-γ, b, y)
 KY(a, b, c, γ, y) = exp(c)*KYp(a+γ, b, y) + exp(-c)*KYp(a-γ, b, y)
-K0p(a, b, y) = ∫D(z->cosh(a+b*z)^y)
+K0p(a, b, y) = y== 0 ? 1. : ∫D(z->cosh(a+b*z)^y)
 K1p(a, b, y) = ∫D(z->cosh(a+b*z)^y * tanh(a+b*z))
 K2p(a, b, y) = ∫D(z->cosh(a+b*z)^y * tanh(a+b*z)^2)
 KYp(a, b, y) = ∫D(z->cosh(a+b*z)^y * log(cosh(a+b*z)))
 
-function Δthermfun(g::FactorGraphTAP, gg, g̃g̃)
-    @extract g : N M m ρ mh ρh mt ρt mth ρth ξ σ γ y op tf Oh Õh
-    @extract op : q̂t q̂0 q̂1 ŝ ŝt
+function thermfun(g::FactorGraphTAP)
+    @extract g : N M m ρ mh ρh mt ρt mth ρth ξ σ γ y op tf Oh Õh O Õ
+    @extract op : q̂t q̂0 q̂1 ŝ ŝt qt q0 q1 s st
     Δϕ = 0.; ΔΣint=0.
-
+    ϕ = 0.; Σint=0;
     # for a=1:M
     #     rh = [y*(ρh[a]-mh[a]^2)+gg[a], ρth[a]-mh[a]*mth[a]]
     #     r̃h = [y*(ρth[a]-mh[a]*mth[a]), g̃g̃[a] - mth[a]^2]
@@ -191,6 +192,60 @@ function Δthermfun(g::FactorGraphTAP, gg, g̃g̃)
     #         ΔΣint += ϵt*ϵ*(ρt[i] - mt[i]*m[i])
     #     end
     # end
+    #TODO fore posso levarlo
+    q0 = 0.;q1=0.;qt=0.; s=0.;st=0.; mm=0.;mmt=0.;
+    for i=1:N
+        mm += m[i]
+        mmt += mt[i]
+        q0 += m[i]*m[i]
+        q1 += ρ[i]
+        qt += mt[i]^2
+        s += ρt[i]
+        st += m[i]*mt[i]
+    end
+    q1<q0 && (q1=q0; print("!nh "))
+    p = (s-st)^2/(q1-q0)
+    # @assert (q1-q0)*(N-qt)-(s-st)^2 >= 0 "(q1-q0)*(1-qt)-(s-st)^2 > 0 q0=$q0 q1=$q1 qt=$qt s=$s st=$st"
+    # @assert q1>=q0 "q1>q0 q0=$q0 q1=$q1"
+    !isfinite(p) && (p=0.; print("!p1 "))
+    p >= N-qt && (p=N-qt-1e-3; print("!p1 "))
+
+    O[:] = [y*(q1 - q0) + N - q1, s - st] #Onsager Reaction on m, coefficients of mh and mth
+    Õ[:] = [y*(s - st), N - qt]           #Onsager Reaction on mt, coefficients of mh and mth
+
+    gg = zeros(M); g̃g̃ = zeros(M)
+    for a=1:M
+        Mtot = 0.
+        M̃tot = 0.
+        for i=1:N
+            # @assert isapprox(m[i], mt[i], atol=1e-4) "ass i=$i m[i] mt[i],  $(m[i]) $(mt[i])"
+            Mtot += ξ[i,a] * m[i]
+            M̃tot += ξ[i,a] * mt[i]
+        end
+        Mtot += (-mh[a]*O[1] - mth[a]*O[2])
+        M̃tot += (-mh[a]*Õ[1] - mth[a]*Õ[2])
+
+        den1 = √(N-q1)
+        den2 = √((N-qt)-p)
+        coeffs = (σ[a]*Mtot/den1, √(q1-q0)/den1,
+                    σ[a]*M̃tot/den2, √p/den2)
+        j00 = J00(coeffs..., y)
+        j01 = J01(coeffs..., y)
+        j02 = J02(coeffs..., y)
+        jd0 = JD0(coeffs..., y)
+        j0d = J0D(coeffs..., y)
+
+        ϕ += log(j00)
+        # Σint += JY(coeffs..., y)/j00
+
+        # @assert isapprox(mth[a], mh[a], atol=1e-4) "mh[a] mth[a],  $(mh[a]) $(mth[a])"
+        gg[a] = 1/den1^2 * jd0 / j00
+        g̃g̃[a] = 1/den2^2 * (j02 / j00 + j0d / j00)
+        # a==1 &&(println("g̃g̃[a]=$(g̃g̃[a]) j02=$j02 j0d=$j0d j00=$j00"))
+
+        @assert isfinite(mh[a])
+        @assert isfinite(ρh[a])
+    end
 
     for i=1:N
         Mtot = 0.
@@ -206,7 +261,8 @@ function Δthermfun(g::FactorGraphTAP, gg, g̃g̃)
         coeffs = (Mtot, √(q̂1-q̂0), M̃tot, γeff)
         k00 = K00(coeffs..., y)
         ϕ0 = log(k00)
-        Σint0 = KY(coeffs..., y) / k00
+        ϕ += ϕ0
+        # Σint0 = KY(coeffs..., y) / k00
 
         for a=1:M
             rh = [y*(ρh[a]-mh[a]^2)+gg[a], ρth[a]-mh[a]*mth[a]]
@@ -229,19 +285,54 @@ function Δthermfun(g::FactorGraphTAP, gg, g̃g̃)
             # δ2 =  log(k00) - ϕ0
             # @assert isapprox(δ1, δ2, atol=1e-4) "$δ1 $δ2"
             Δϕ += log(k00) - ϕ0
-            ΔΣint += KY(coeffs..., y)/k00 - Σint0
+            # ΔΣint += KY(coeffs..., y)/k00 - Σint0
         end
+
     end
-    Δϕ, ΔΣint
+    ϕ = (ϕ + Δϕ) / N
+    ϕ += - y*γ*s + y*log(2)
+
+    # tf.ϕ /= N
+    # tf.ϕ += -0.5y*(y-1)* op.q̂1*q1 + 0.5y^2*q̂0*q0 - 0.5y*q̂1 + 0.5q̂t*qt - 0.5q̂t
+    # tf.ϕ += -y*(s*ŝ - st*ŝt) + y * log(2) #- y*m̂*mm -m̂t*mmt
+    # tf.Σint /= N
+    # tf.Σint += -(y-0.5)* q̂1*q1 + y*q̂0*q0 -0.5q̂1 +log(2)
+    # tf.Σint += -(s*ŝ - st*ŝt) - γ*s # - m̂*mm
+
+    return ϕ
 end
 
-function oneBPiter!(g::FactorGraphTAP, fixmt::Bool; dump=0., computetf=false)
+function compute_tf!(g::FactorGraphTAP)
+    @extract g : tf
+    ϕ = thermfun(g)
+
+    # δ = 1e-2
+    # yold = g.y
+    # g.y += δ
+    # for it=1:20
+    #     Δ = oneBPiter!(g, false, dump=0.)
+    #     print("it=$it  y=$(g.y)   \tΔ=$Δ ...")
+    #     E = energy(g)
+    #     println(g.op)
+    #     Δ < 1e-7 && break
+    # end
+    # ϕnew = thermfun(g)
+    # println(ϕnew)
+    # g.y = yold
+
+    println(tf)
+    reset!(tf)
+    tf.ϕ = ϕ
+    # tf.Σint = (ϕnew - ϕ) / δ
+end
+
+function oneBPiter!(g::FactorGraphTAP, fixmt::Bool; dump=0.)
     @extract g N M m ρ mh ρh mt ρt mth ρth ξ σ γ y op tf O Õ Oh Õh
     reset!(tf)
     # O and Ô are the Onsager rection terms
     q0 = 0.;q1=0.;qt=0.; s=0.;st=0.; mm=0.;mmt=0.;
-    gg = zeros(M)
-    g̃g̃ = zeros(M)
+    # gg = zeros(M)
+    # g̃g̃ = zeros(M)
     for i=1:N
         mm += m[i]
         mmt += mt[i]
@@ -301,12 +392,12 @@ function oneBPiter!(g::FactorGraphTAP, fixmt::Bool; dump=0., computetf=false)
         ρth[a] = 1/(den2*den1) * j11 / j00
 
         tf.ϕ += log(j00)
-        tf.Σint += JY(coeffs..., y)/j00
+        # tf.Σint += JY(coeffs..., y)/j00
 
-        # @assert isapprox(mth[a], mh[a], atol=1e-4) "mh[a] mth[a],  $(mh[a]) $(mth[a])"
-        gg[a] = 1/den1^2 * jd0 / j00
-        g̃g̃[a] = 1/den2^2 * (j02 / j00 + j0d / j00)
-        # a==1 &&(println("g̃g̃[a]=$(g̃g̃[a]) j02=$j02 j0d=$j0d j00=$j00"))
+        # # @assert isapprox(mth[a], mh[a], atol=1e-4) "mh[a] mth[a],  $(mh[a]) $(mth[a])"
+        # gg[a] = 1/den1^2 * jd0 / j00
+        # g̃g̃[a] = 1/den2^2 * (j02 / j00 + j0d / j00)
+        # # a==1 &&(println("g̃g̃[a]=$(g̃g̃[a]) j02=$j02 j0d=$j0d j00=$j00"))
 
         Oh[1] += 1/den1^2 * jd0 / j00
         Õh[2] += 1/den2^2 * (j02 / j00 + j0d / j00)
@@ -363,7 +454,7 @@ function oneBPiter!(g::FactorGraphTAP, fixmt::Bool; dump=0., computetf=false)
 
         # i==1 &&(println("M̃tot=$M̃tot Õh=$Õh mt[i]=$(mt[i]) q̂t=$(q̂t)"))
         tf.ϕ += log(k00)
-        tf.Σint += KY(coeffs..., γeff, y)/k00
+        # tf.Σint += KY(coeffs..., γeff, y)/k00
 
         Δ = max(Δ, abs(m[i] - oldm))
         Δ = max(Δ, abs(mt[i] - oldmt))
@@ -371,24 +462,30 @@ function oneBPiter!(g::FactorGraphTAP, fixmt::Bool; dump=0., computetf=false)
         # println(Δ)
     end
 
+    # Ricalcolo i parametri d'ordine ed i termini di onsager per la non-hat
+    # Dato che cmq lo faccio all'inizio della funzione questa parte è utile solo
+    # nell'ultima iterazione.
+    # NON LEVARE, altrimenti poi non posso calcolare bene le funzioni
+    # termodinamiche
+    q0 = 0.;q1=0.;qt=0.; s=0.;st=0.; mm=0.;mmt=0.;
+    for i=1:N
+        mm += m[i]
+        mmt += mt[i]
+        q0 += m[i]*m[i]
+        q1 += ρ[i]
+        qt += mt[i]^2
+        s += ρt[i]
+        st += m[i]*mt[i]
+    end
+    O[:] = [y*(q1 - q0) + N - q1, s - st] #Onsager Reaction on m, coefficients of mh and mth
+    Õ[:] = [y*(s - st), N - qt]           #Onsager Reaction on mt, coefficients of mh and mth
+
+
+    tf.ϕ /= N
+    tf.ϕ += - y*γ*s + y*log(2)
+
     q0/=N;q1/=N;qt/=N;s/=N;st/=N; mm/=N;mmt/=N; # le hat sono già O(1) q̂0/=M;q̂1/=M;q̂t/=M;ŝ/=M;ŝt/=M
     g.op = OrderParams(mm,mmt,q0,q1,qt,s,st,m̂,m̂t,q̂0,q̂1,q̂t,ŝ,ŝt)
-
-    if computetf
-        Δϕ, ΔΣint = Δthermfun(g, gg, g̃g̃)
-        tf.ϕ += Δϕ - y*γ*s*N + y*log(2)*N
-        tf.Σint += ΔΣint - γ*s*N + log(2)*N
-        tf.ϕ /= N; tf.Σint /= N
-        # println("ϕ=$(tf.ϕ)")
-        # println("Σint=$(tf.Σint)")
-    end
-
-    # tf.ϕ /= N
-    # tf.ϕ += -0.5y*(y-1)* op.q̂1*q1 + 0.5y^2*q̂0*q0 - 0.5y*q̂1 + 0.5q̂t*qt - 0.5q̂t
-    # tf.ϕ += -y*(s*ŝ - st*ŝt) + y * log(2) #- y*m̂*mm -m̂t*mmt
-    # tf.Σint /= N
-    # tf.Σint += -(y-0.5)* q̂1*q1 + y*q̂0*q0 -0.5q̂1 +log(2)
-    # tf.Σint += -(s*ŝ - st*ŝt) - γ*s # - m̂*mm
 
     Δ
 end
@@ -417,7 +514,7 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
     ok = false
     for it=1:maxiters
         print("it=$it ...")
-        Δ = oneBPiter!(g, fixmt, dump=dump, computetf = false)
+        Δ = oneBPiter!(g, fixmt, dump=dump)
         E = energy(g)
         @printf("r=%.3f γ=%.3f  E=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Δ)
         println(g.op)
@@ -434,7 +531,7 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
             break
         end
     end
-    oneBPiter!(g, fixmt, dump=dump, computetf = true)
+    compute_tf!(g)
     println(g.op)
     println(g.tf)
     return ok
