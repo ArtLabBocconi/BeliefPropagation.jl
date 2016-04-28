@@ -67,6 +67,8 @@ include("layers/maxsum.jl")
 include("layers/bp.jl")
 include("layers/tap.jl")
 include("layers/parity.jl")
+include("layers/bp_real.jl")
+
 
 istoplayer(layer::AbstractLayer) = (typeof(layer.top_layer) == OutputLayer)
 isbottomlayer(layer::AbstractLayer) = (typeof(layer.bottom_layer) == InputLayer)
