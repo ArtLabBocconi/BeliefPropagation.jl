@@ -17,6 +17,7 @@ G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
 #GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
 function GHapp(x)
+    # print("ghapp")
     y = 1/x
     y2 = y^2
     x + y * (1 - 2y2 * (1 - 5y2 * (1 - 7.4y2)))
@@ -25,15 +26,16 @@ GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
 
 G(x, β) = (1 - exp(-β)) * G(x)
 H(x,β) = (eb=exp(-β); eb + (1-eb)*H(x))
-GH(x, β) = β == Inf ? GH(x) : x > 30.0 ? GHapp(x, β) : G(x, β) / H(x, β)
-function GHapp(x, β)
-    # NOTE: not a very good approximation when x is large and β is not
-    y = 1/x
-    y2 = y^2
-    a = e^(-β + (x^2)/2) / ((1 - e^(-β)) * √(2π))
-    return x / (x * a + 1 - y2 * (1 - 3y2 * (1 - 5y2)))
-end
-
+GH(x, β) = β == Inf ? GH(x) : GHapp(x, β) #x > 30.0 ? GHapp(x, β) : G(x, β) / H(x, β)
+# function GHapp(x, β)
+#     # print("ghapp")
+#     # NOTE: not a very good approximation when x is large and β is not
+#     y = 1/x
+#     y2 = y^2
+#     a = e^(-β + (x^2)/2) / ((1 - e^(-β)) * √(2π))
+#     return x / (x * a + 1 - y2 * (1 - 3y2 * (1 - 5y2)))
+# end
+GHapp(x, β) = exp(log(G(x, β)) - log(H(x, β)))
 type Fact
     m::VMess
     ρ::VMess
@@ -114,10 +116,10 @@ type ReinfParams
     r::Float64
     rstep::Float64
     γ::Float64
-    γ_step::Float64
+    γstep::Float64
     tγ::Float64
     wait_count::Int
-    ReinfParams(r=0.,rstep=0.,γ=0.,γ_step=0.) = new(r, rstep, γ, γ_step, tanh(γ))
+    ReinfParams(r=0.,rstep=0.,γ=0.,γstep=0.) = new(r, rstep, γ, γstep, tanh(γ))
 end
 
 deg(f::Fact) = length(f.m)
@@ -146,12 +148,13 @@ function update!(f::Fact, β)
     for i=1:deg(f)
         Mcav = M - ξ[i]*m[i]
         Ccav = C - ξ[i]^2*ρ[i]
+        Ccav <= 0. && (print("*"); Ccav =1e-5)
         sqrtC = sqrt(Ccav)
         x = σ*Mcav / sqrt(Ccav)
         gh = GH(-x, β)
         @assert isfinite(gh)
         mh[i][] = σ*ξ[i]/sqrtC * gh
-        ρh[i][] = (ξ[i]/sqrtC)^2 *(x*gh + gh^2)
+        ρh[i][] = (ξ[i]/sqrtC)^2 *(x*gh + gh^2) # -∂^2 log ν(W)
         @assert isfinite(mh[i][])
         @assert isfinite(ρh[i][])
     end
@@ -163,7 +166,8 @@ function update!(v::Var, r::Float64 = 0.)
 
     v.h1 = sum(mh) + r*h1
     v.h2 = λ + sum(ρh) + r*h2
-    @assert v.h2 > 0 "$(v.h2)"
+    # @assert v.h2 > 0 "$(v.h2)"
+    v.h2<0 && (print("!"); v.h2 = 1e-5)
     ### compute cavity fields
     for a=1:deg(v)
         h1 = v.h1 - mh[a]
@@ -201,7 +205,7 @@ function update_reinforcement!(reinfpar::ReinfParams)
             reinfpar.r = 1 - (1-reinfpar.r) * (1-reinfpar.rstep)
         else
             reinfpar.r *= 1 + reinfpar.rstep
-            reinfpar.γ *= 1 + reinfpar.γ_step
+            reinfpar.γ *= 1 + reinfpar.γstep
             reinfpar.tγ = tanh(reinfpar.γ)
         end
     end
@@ -262,8 +266,8 @@ mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
 # mags_noreinf(g::FactorGraph) = Float64[mag_noreinf(v) for v in g.vnodes]
 
 
-function solve(; N::Int=1000, α::Float64=0.6, seed_ξ::Int=-1, kw...)
-    seed_ξ > 0 && srand(seed_ξ)
+function solve(; N::Int=1000, α::Float64=0.6, seedξ::Int=-1, kw...)
+    seedξ > 0 && srand(seedξ)
     M = round(Int, α * N)
     ξ = rand([-1.,1.], N, M)
     # ξ = randn(N, M)
@@ -274,7 +278,7 @@ end
 function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
                 method = :reinforcement, #[:reinforcement, :decimation]
                 r::Float64 = 0., rstep::Float64= 0.001,
-                λ::Float64 = 1., β = 0.1,
+                λ::Float64 = 1., β = Inf,
                 altsolv::Bool = true, altconv = true,
                 seed::Int = -1)
 
