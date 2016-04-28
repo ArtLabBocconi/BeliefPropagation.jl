@@ -118,8 +118,12 @@ getW(mags::VecVecVec) = [[Float64[1-2signbit(m) for m in magk]
 
 function printvec(q::Vector{Float64}, head = "")
     print(head)
-    for e in q
-        @printf("%.6f ", e)
+    if length(q) < 20
+        for e in q
+            @printf("%.6f ", e)
+        end
+    else
+        @printf("mean:%.6f std:%.6f", mean(q), std(q))
     end
     println()
 end

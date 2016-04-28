@@ -22,7 +22,18 @@ function GHapp(x)
     x + y * (1 - 2y2 * (1 - 5y2 * (1 - 7.4y2)))
 end
 GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
-# GH(x) = G(x) / H(x)
+
+G(x, β) = (1 - exp(-β)) * G(x)
+H(x,β) = (eb=exp(-β); eb + (1-eb)*H(x))
+GH(x, β) = β == Inf ? GH(x) : x > 30.0 ? GHapp(x, β) : G(x, β) / H(x, β)
+function GHapp(x, β)
+    # NOTE: not a very good approximation when x is large and β is not
+    y = 1/x
+    y2 = y^2
+    a = e^(-β + (x^2)/2) / ((1 - e^(-β)) * √(2π))
+    return x / (x * a + 1 - y2 * (1 - 3y2 * (1 - 5y2)))
+end
+
 type Fact
     m::VMess
     ρ::VMess
@@ -51,12 +62,13 @@ Var() = Var(VMess(), VMess(), VPMess(), VPMess(), 0., Mess(0), Mess(0))
 type FactorGraph
     N::Int
     M::Int
+    β::Float64
     ξ::Matrix{Float64}
     σ::Vector{Int}
     fnodes::Vector{Fact}
     vnodes::Vector{Var}
 
-    function FactorGraph(ξ::Matrix, σ::Vector{Int}, λ::Float64=1.)
+    function FactorGraph(ξ::Matrix, σ::Vector{Int}, λ::Float64=1.;β=30.)
         N = size(ξ, 1)
         M = length(σ)
         @assert size(ξ, 2) == M
@@ -94,7 +106,7 @@ type FactorGraph
             push!(v.ρ, getref(f.ρ, length(f.ρ)))
         end
 
-        new(N, M, ξ, σ, fnodes, vnodes)
+        new(N, M, β, ξ, σ, fnodes, vnodes)
     end
 end
 
@@ -123,7 +135,7 @@ function initrand!(g::FactorGraph)
 end
 
 #TODO
-function update!(f::Fact)
+function update!(f::Fact, β)
     @extract f m mh ρ ρh σ ξ
     M = 0.
     C = 0.
@@ -136,9 +148,12 @@ function update!(f::Fact)
         Ccav = C - ξ[i]^2*ρ[i]
         sqrtC = sqrt(Ccav)
         x = σ*Mcav / sqrt(Ccav)
-        gh = GH(-x)
+        gh = GH(-x, β)
+        @assert isfinite(gh)
         mh[i][] = σ*ξ[i]/sqrtC * gh
         ρh[i][] = (ξ[i]/sqrtC)^2 *(x*gh + gh^2)
+        @assert isfinite(mh[i][])
+        @assert isfinite(ρh[i][])
     end
 end
 
@@ -148,7 +163,7 @@ function update!(v::Var, r::Float64 = 0.)
 
     v.h1 = sum(mh) + r*h1
     v.h2 = λ + sum(ρh) + r*h2
-    @assert v.h2 > 0
+    @assert v.h2 > 0 "$(v.h2)"
     ### compute cavity fields
     for a=1:deg(v)
         h1 = v.h1 - mh[a]
@@ -167,7 +182,7 @@ function oneBPiter!(g::FactorGraph, r::Float64=0.)
     Δ = 0.
 
     for a=randperm(g.M)
-        update!(g.fnodes[a])
+        update!(g.fnodes[a], g.β)
     end
 
     for i=randperm(g.N)
@@ -259,12 +274,12 @@ end
 function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
                 method = :reinforcement, #[:reinforcement, :decimation]
                 r::Float64 = 0., rstep::Float64= 0.001,
-                λ::Float64 = 1.,
+                λ::Float64 = 1., β = 0.1,
                 altsolv::Bool = true, altconv = true,
                 seed::Int = -1)
 
     seed > 0 && srand(seed)
-    g = FactorGraph(ξ, σ, λ)
+    g = FactorGraph(ξ, σ, λ, β=β)
     initrand!(g)
 
     # if method == :reinforcement

@@ -308,9 +308,11 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters = 10000, ϵ = 1e-4,
                 γ = 0., γ_step = 0.,
                 altsolv::Bool = true,
                 altconv::Bool = true,
-                n= 100,
+                n= 100, dex = 0.1
                 seed::Int = -1)
     global nint = n
+    global dex = dx
+
     seed > 0 && srand(seed)
     g = FactorGraphTAP(ξ, σ, γ, y)
     initrand!(g)

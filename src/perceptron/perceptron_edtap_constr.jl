@@ -15,8 +15,8 @@ GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
 
 ## Integration routines #####
 ###
-const ∞ = 30.0
-const dx = 0.1
+∞ = 30.0
+dx = 0.1
 interval = map(x->sign(x)*abs(x)^2, -1:dx:1) .* ∞
 ∫D(f) = quadgk(z->begin
 r = G(z) * f(z)
@@ -331,12 +331,15 @@ function thermfun!(g::FactorGraphTAP)
     δ = 1e-5
     yold = g.y
     g.y += δ
+    Δ=0
+    ϵ = 1e-7
     for it=1:100
         print("thermfun it=$it ...")
         Δ = oneBPiter!(g, false, dump=0., computetf = false)
         println("Δ=$Δ")
-        Δ < 1e-7 && break
+        Δ < ϵ && break
     end
+    Δ > ϵ && error()
     oneBPiter!(g, false, dump=0., computetf = true)
 
     tfnew = deepcopy(g.tf)
@@ -345,8 +348,9 @@ function thermfun!(g::FactorGraphTAP)
         print("thermfun it=$it ...")
         Δ = oneBPiter!(g, false, dump=0., computetf = false)
         println("Δ=$Δ")
-        Δ < 1e-7 && break
+        Δ < ϵ && break
     end
+    Δ > ϵ && error()
     oneBPiter!(g, false, dump=0., computetf = true)
     # tf.ϕ += Δϕ - y*γ*s*N + y*log(2)*N
     # tf.Σint += ΔΣint - γ*s*N + log(2)*N
@@ -750,11 +754,15 @@ function span(;N=2001, lstα = 0.5, lstγ = 0., n=100, y=0.,
 end
 
 include("../deeplearning/deep_binary.jl")
-function span_committe(;K=[301,5], α = 0.2, lstγ = 0., n=100, y=0.
+function span_committe(;K=[301,5], α = 0.2, lstγ = 0.
+        , n=100, dx=0.1
+        , y=0.
         , ϵ = 1e-4, maxiters = 200, seedξ = -1, resfile = "pf_committee.new.txt"
         , ry = 0.3, ry_step = 0.01, dump=0.
         , loadξτ = "", saveξτ = "")
 	global nint = n
+    global interval = map(x->sign(x)*abs(x)^2, -1:dx:1) .* ∞
+
     @assert length(K) == 3
 	results = Any[]
 	lockfile = "reslock.tmp"
@@ -767,7 +775,7 @@ function span_committe(;K=[301,5], α = 0.2, lstγ = 0., n=100, y=0.
         ξ = rand([-1.,1.], N, M)
         σ = ones(Int, M)
         g_deep, W_deep, E_deep, _ = DeepBinary.solve(ξ, σ; K=K,layers=[:tap,:bpex]
-                           , ry=0.3, ry_step=ry_step, r_step=0., ϵ=1e-5
+                           , ry=ry, ry_step=ry_step, r_step=0., ϵ=1e-5
                            , plotinfo=0, maxiters=20000, altsolv=false, altconv=true)
         τ = [Int[convert(Int, sign(g_deep.layers[3].allmy[a][k])) for a=1:M] for k=1:K[2]]
         if saveξτ != ""
@@ -779,7 +787,7 @@ function span_committe(;K=[301,5], α = 0.2, lstγ = 0., n=100, y=0.
         ξ=d["ξ"]; τ=d["τ"];
         N, M = size(ξ)
     end
-    for k=1:1
+    for k=1:K[2]
         println("@@ Perceptron $k")
         @assert length(τ[k]) == M
         sigma = ones(Int, M)
@@ -790,28 +798,31 @@ function span_committe(;K=[301,5], α = 0.2, lstγ = 0., n=100, y=0.
             end
         end
         # g = FactorGraphTAP(ξ, τ[k], 0., y)
-        g = FactorGraphTAP(xi, sigma, 0., y)
+        g = FactorGraphTAP(xi, sigma, lstγ[1], y)
 
         initrand!(g)
-        reinfpar = ReinfParams(y, 0., 0., 0.)
+        reinfpar = ReinfParams(y, 0., lstγ[1], 0.)
         ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false, altconv=true,reinfpar=reinfpar, dump=dump)
         @assert ok
-        for γ in lstγ
+        length(lstγ) < 2 && break
+        for γ in lstγ[2:end]
             g.γ=γ
             reinfpar.γ=γ
             println("\n#####  NEW ITER  ###############\n")
-            ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false, altconv=true, fixmt=true, reinfpar=reinfpar)
-            push!(results, (ok, deepcopy(g.op), deepcopy(g.tf)))
-            if ok
-                exclusive(lockfile) do
-                    open(resfile, "a") do rf
-                        print(rf, "$α $γ $y $k   ")
-                        veryshortshow(rf, g.tf); print(rf, " ")
-                        veryshortshow(rf, g.op); print(rf,"\n")
-                    end
-                end
+            try
+                ok = converge!(g, maxiters=maxiters, ϵ=ϵ, altsolv=false, altconv=true, fixmt=true, reinfpar=reinfpar)
+                push!(results, (ok, deepcopy(g.op), deepcopy(g.tf)))
+            catch
+                break
             end
             ok || break
+            exclusive(lockfile) do
+                open(resfile, "a") do rf
+                    print(rf, "$α $γ $y $k   ")
+                    veryshortshow(rf, g.tf); print(rf, " ")
+                    veryshortshow(rf, g.op); print(rf,"\n")
+                end
+            end
         end
     end
     return results
