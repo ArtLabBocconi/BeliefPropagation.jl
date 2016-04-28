@@ -266,10 +266,48 @@ mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
 # mags_noreinf(g::FactorGraph) = Float64[mag_noreinf(v) for v in g.vnodes]
 
 
-function solve(; N::Int=1000, α::Float64=0.6, seedξ::Int=-1, kw...)
+# function batch_renorm!(ξ)
+#     N, M = size(ξ)
+#     μ = zeros(N)
+#     σ = zeros(N)
+#     for i=1:N
+#         μ[i] = mean(ξ[i,:])
+#     end
+#     for i=1:N
+#         μ[i] = mean(ξ[i,:])
+#     end
+# end
+
+
+function solve_test(; N::Int=1000, α::Float64=0.6, biasξ = 0., seedξ::Int=-1, kw...)
     seedξ > 0 && srand(seedξ)
     M = round(Int, α * N)
-    ξ = rand([-1.,1.], N, M)
+    # ξ = rand([-1.,1.], N, M)
+    ξ = randn(N, M)
+    # σ = rand([-1,1], M)
+    σ = zeros(Int, M)
+    for a=1:M
+        σ[a] = ξ[1, a] > biasξ ? 1 : -1
+    end
+    if biasξ != 0
+        ξnew = ones(N+1, M)
+        ξnew[1:N, 1:M] = ξ
+        ξ = ξnew
+    end
+
+    solve(ξ, σ; kw...)
+end
+
+function solve(; N::Int=1000, α::Float64=0.6, biasξ = 0., seedξ::Int=-1, kw...)
+    seedξ > 0 && srand(seedξ)
+    M = round(Int, α * N)
+    ξ = rand([-1.,1.], N, M) + biasξ
+    if biasξ != 0
+        ξnew = ones(N+1, M)
+        ξnew[1:N, 1:M] = ξ
+        ξ = ξnew
+    end
+
     # ξ = randn(N, M)
     σ = rand([-1,1], M)
     solve(ξ, σ; kw...)

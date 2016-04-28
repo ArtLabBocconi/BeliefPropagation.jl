@@ -27,7 +27,7 @@ type FactorGraph
     dropout::Dropout
 
     function FactorGraph(ξ::Matrix{Float64}, σ::Vector{Int}
-                , K::Vector{Int}, layertype::Vector{Symbol}; βms = 1.,rms =1., ndrops=0)
+                , K::Vector{Int}, layertype::Vector{Symbol}; β=Inf, βms = 1.,rms =1., ndrops=0)
         N, M = size(ξ)
         @assert length(σ) == M
         println("# N=$N M=$M α=$(M/N)")
@@ -52,12 +52,16 @@ type FactorGraph
             elseif  layertype[l] == :ms
                 push!(layers, MaxSumLayer(K[l+1], K[l], M, βms=βms, rms=rms))
                 println("Created MaxSumLayer")
+            elseif  layertype[l] == :parity
+                @assert l == L
+                push!(layers, ParityLayer(K[l+1], K[l], M))
+                println("Created ParityLayer")
             else
                 error("Wrong Layer Symbol")
             end
         end
 
-        push!(layers, OutputLayer(σ))
+        push!(layers, OutputLayer(σ,β=β))
         println("Created OutputLayer")
 
         for l=1:L+1
@@ -238,7 +242,13 @@ function forward{T}(W::Vector{Vector{Vector{T}}}, ξ::Vector)
         if l==L
             stabilities = map(w->dot(σks, w), W[L])
         end
-        σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
+        # σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
+        if l!=L
+            σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
+        else
+            σks = Int[ifelse(prod(σks) > 0, 1, -1) for k=1:K[l+1]]
+        end
+        # for Parity Layer
     end
 
     return σks, stabilities
@@ -379,13 +389,13 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 ry::Float64 = 0., ry_step::Float64= 0.0,
                 altsolv::Bool = true, altconv::Bool = false,
                 seed::Int = -1, plotinfo=-1,
-                βms = 1., rms = 1., ndrops = 0)
+                β=Inf, βms = 1., rms = 1., ndrops = 0)
 
     # for l=1:length(K)
     #     @assert K[l] % 2 == 1
     # end
     seed > 0 && srand(seed)
-    g = FactorGraph(ξ, σ, K, layers, βms=βms, rms=rms, ndrops=ndrops)
+    g = FactorGraph(ξ, σ, K, layers, β=β, βms=βms, rms=rms, ndrops=ndrops)
     initrand!(g)
     fixtopbottom!(g)
     reinfpar = ReinfParams(r, r_step, ry, ry_step)

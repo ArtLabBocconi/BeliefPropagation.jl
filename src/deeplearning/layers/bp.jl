@@ -265,7 +265,7 @@ function updateFact!(layer::BPLayer, k::Int)
         if !isbottomlayer(layer)
             for i=1:N
                 # mhy[i][k] = mhw[i][k]* m[i] / my[i]
-                mhy[i][a] = myatanh(m[i]/Ccav * GH(pd[a],-Mcav / Ccav))
+                mhy[i][k] = myatanh(m[i]/Ccav * GH(pd[a],-Mcav / Ccav))
             end
         end
 
