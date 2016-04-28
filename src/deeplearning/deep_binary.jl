@@ -242,13 +242,13 @@ function forward{T}(W::Vector{Vector{Vector{T}}}, ξ::Vector)
         if l==L
             stabilities = map(w->dot(σks, w), W[L])
         end
-        # σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
-        if l!=L
-            σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
-        else
-            σks = Int[ifelse(prod(σks) > 0, 1, -1) for k=1:K[l+1]]
-        end
+        σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
         # for Parity Layer
+        # if l!=L
+        #     σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
+        # else
+        #     σks = Int[ifelse(prod(σks) > 0, 1, -1) for k=1:K[l+1]]
+        # end
     end
 
     return σks, stabilities

@@ -9,7 +9,7 @@ include("deeplearning.jl")
 println("@ ... done.")
 
 println("@ Testing KSAT...")
-include("kast.jl")
+include("ksat.jl")
 println("@ ... done.")
 
 println("@ ALL TESTS PASSED!")
