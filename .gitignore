@@ -1,3 +1,7 @@
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
+*.jld
+*.dat
+*.txt
+pr_committee/
