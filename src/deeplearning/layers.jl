@@ -123,6 +123,8 @@ function forwardParity(lay::AbstractLayer, ξ::Vector)
     return σks, stability
 end
 
+initYBottom!(lay::AbstractLayer, a::Int) = updateVarY!(lay, a) #TODO define for every layer type
+
 chain!(lay1::InputLayer, lay2::OutputLayer) = error("Cannot chain InputLayer and OutputLayer")
 
 function chain!(lay1::AbstractLayer, lay2::OutputLayer)
@@ -135,7 +137,7 @@ function chain!{L <: AbstractLayer}(lay1::InputLayer, lay2::L)
     lay2.l = lay1.l+1
     lay2.bottom_allpu = lay1.allpu
     for a=1:lay2.M
-        updateVarY!(lay2, a)
+        initYBottom!(lay2, a)
     end
     lay2.bottom_layer = lay1
 end

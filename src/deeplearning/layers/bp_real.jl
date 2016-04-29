@@ -200,13 +200,30 @@ function updateVarW!(layer::BPRealLayer, k::Int, r::Float64=0.)
     return Δ
 end
 
+function initYBottom!(layer::BPRealLayer, a::Int)
+    @extract layer K N M allm allmy allmh allpu allpd allhy
+    @extract layer bottom_allpu top_allpd
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+    # @assert false
+    my = allmy[a]
+    for i=1:N
+        mycav = allmycav[a]
+        pu = bottom_allpu[i][a];
+
+        my[i] = 2pu-1
+        for k=1:K
+            mycav[k][i] = 2pu-1
+        end
+    end
+end
+
 function updateVarY!(layer::BPRealLayer, a::Int, ry::Float64=0.)
     @extract layer K N M allm allmy allmh allpu allpd allhy
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
     # @assert false
-
     my = allmy[a]
     hy = allhy[a]
     for i=1:N

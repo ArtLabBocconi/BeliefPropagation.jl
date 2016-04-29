@@ -311,7 +311,7 @@ function solveTS(; K::Vector{Int} = [101,3], α::Float64=0.6
 end
 
 function solve(; K::Vector{Int} = [101,3], α::Float64=0.6
-            , seedξ::Int=-1
+            , seedξ::Int=-1, realξ = false
             , dξ::Vector{Float64} = Float64[], nξ::Vector{Int} = Int[]
             , maketree = false, kw...)
 
@@ -323,9 +323,11 @@ function solve(; K::Vector{Int} = [101,3], α::Float64=0.6
 
     if length(nξ) == 0
         M = round(Int, α * numW)
-        ξ = rand([-1.,1.], K[1], M)
-        # ξ = (2rand(K[1], M) - 1)
-        # ξ = randn(K[1], M)
+        if realξ
+            ξ = randn(K[1], M)
+        else
+            ξ = rand([-1.,1.], K[1], M)
+        end
         # σ = ones(Int, M)
         σ = rand([-1,1], M)
     else
@@ -376,16 +378,13 @@ function solveMNIST(; α=0.01, K::Vector{Int} = [784,10], kw...)
 end
 
 function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
-                K::Vector{Int} = [101, 3],layers=[:tap,:tapex,:tapex],
+                K::Vector{Int} = [101, 3, 1],layers=[:tap,:tapex,:tapex],
                 r::Float64 = 0., r_step::Float64= 0.001,
                 ry::Float64 = 0., ry_step::Float64= 0.0,
                 altsolv::Bool = true, altconv::Bool = false,
                 seed::Int = -1, plotinfo=0,
                 β=Inf, βms = 1., rms = 1., ndrops = 0, maketree=false)
 
-    # for l=1:length(K)
-    #     @assert K[l] % 2 == 1
-    # end
     seed > 0 && srand(seed)
     g = FactorGraph(ξ, σ, K, layers, β=β, βms=βms, rms=rms, ndrops=ndrops)
     initrand!(g)
