@@ -324,6 +324,8 @@ function solve(; K::Vector{Int} = [101,3], α::Float64=0.6
         M = round(Int, α * numW)
         ξ = rand([-1.,1.], K[1], M)
         # ξ = (2rand(K[1], M) - 1)
+        # ξ = randn(K[1], M)
+        # σ = ones(Int, M)
         σ = rand([-1,1], M)
     else
         ξ0 = rand([-1.,1.], K[1],1)
@@ -377,7 +379,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 r::Float64 = 0., r_step::Float64= 0.001,
                 ry::Float64 = 0., ry_step::Float64= 0.0,
                 altsolv::Bool = true, altconv::Bool = false,
-                seed::Int = -1, plotinfo=-1,
+                seed::Int = -1, plotinfo=0,
                 β=Inf, βms = 1., rms = 1., ndrops = 0, maketree=false)
 
     # for l=1:length(K)
