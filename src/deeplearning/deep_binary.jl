@@ -121,8 +121,7 @@ function update!(g::FactorGraph, r::Float64, ry::Float64)
     return Δ
 end
 
-getW(mags::VecVecVec) = [[Float64[1-2signbit(m) for m in magk]
-                        for magk in magsl] for magsl in mags]
+getW(g::FactorGraph) = [getW(lay) for lay in g.layers[2:end-1]]
 
 function printvec(q::Vector{Float64}, head = "")
     print(head)
@@ -136,8 +135,7 @@ function printvec(q::Vector{Float64}, head = "")
     println()
 end
 function plot_info(g::FactorGraph, info=1)
-    m = mags(g)
-    W = getW(m)
+    W = getW(g)
     K = g.K
     L = length(K)-1
     N = length(W[1][1])
@@ -222,18 +220,13 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
     for it=1:maxiters
         Δ = update!(g, reinfpar.r, reinfpar.ry)
         E, h = energy(g)
-        Ereal, h = energy(g, mags(g))
-        @printf("it=%d \t r=%.3f ry=%.3f\t Ereal=%d \t E=%d \t Δ=%f \n"
-                , it, reinfpar.r, reinfpar.ry, Ereal, E, Δ)
+        @printf("it=%d \t r=%.3f ry=%.3f\t \t E=%d \t Δ=%f \n"
+                , it, reinfpar.r, reinfpar.ry, E, Δ)
         # println(h)
         plotinfo >=0  && plot_info(g, plotinfo)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
             println("Found Solution!")
-            break
-        end
-        if Ereal == 0  && typeof(g.layers[2]) == BPRealLayer
-            println("Found Real Solution!")
             break
         end
         if altconv && Δ < ϵ
@@ -243,42 +236,28 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
     end
 end
 
-function forward{T}(W::Vector{Vector{Vector{T}}}, ξ::Vector)
-    L=length(W)
-    K = [length(W[1][1]); map(length, W)]
+function forward(g::FactorGraph, ξ::Vector)
+    @extract g: L layers
     σks = deepcopy(ξ)
-    stabilities = zeros(K[L])
-    for l=1:L
-        if l==L
-            stabilities = map(w->dot(σks, w), W[L])
-        end
-        σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
-        # for Parity Layer
-        # if l!=L
-        #     σks = Int[ifelse(dot(σks, W[l][k]) > 0, 1, -1) for k=1:K[l+1]]
-        # else
-        #     σks = Int[ifelse(prod(σks) > 0, 1, -1) for k=1:K[l+1]]
-        # end
+    stability = Vec()
+    for l=2:L+1
+        σks, stability = forward(layers[l], σks)
     end
-
-    return σks, stabilities
+    return σks, stability
 end
 
-function energy{T}(g::FactorGraph, W::Vector{Vector{Vector{T}}})
-    @extract g M K σ ξ
-    L=length(W)
+function energy(g::FactorGraph)
+    @extract g: M ξ
     E = 0
-    stabilities = zeros(M)
+    stability = zeros(M)
     for a=1:M
-        σks, stab = forward(W, ξ[:,a])
-        stabilities[a] = sum(stab)
-        E += all((σ[a] .* σks) .> 0) ? 0 : 1
+        σks, stab = forward(g, ξ[:,a])
+        stability[a] = sum(stab)
+        E += energy(g.layers[end], σks, a)
     end
 
-    E, stabilities
+    E, stability
 end
-
-energy(g::FactorGraph) = energy(g, getW(mags(g)))
 
 mags(g::FactorGraph) = [(lay.allm)::VecVec for lay in g.layers[2:end-1]]
 
@@ -345,7 +324,7 @@ function solve(; K::Vector{Int} = [101,3], α::Float64=0.6
         M = round(Int, α * numW)
         ξ = rand([-1.,1.], K[1], M)
         # ξ = (2rand(K[1], M) - 1)
-        σ = ones(Int, M)
+        σ = rand([-1,1], M)
     else
         ξ0 = rand([-1.,1.], K[1],1)
         nξ[end] = round(Int, α * numW / prod(nξ[1:end-1]))
@@ -415,7 +394,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
             altsolv=altsolv, altconv=altconv, plotinfo=plotinfo)
 
     E, stab = energy(g)
-    return g, getW(mags(g)), E, stab
+    return g, getW(g), E, stab
 end
 
 end #module

@@ -81,7 +81,7 @@ function updateFact!(layer::ParityLayer, k::Int)
         mhy[2][k] = atanh(mtop*my[1])
         # println(mhy)
         for i=1:N
-            !isfinite(mhy[i][k]) && (print("*y"); mhy[i][k] = sign(mhy[i][k])*50.)
+            !isfinite(mhy[i][k]) && (mhy[i][k] = sign(mhy[i][k])*50.) # print("*y"); 
         end
     end
 end

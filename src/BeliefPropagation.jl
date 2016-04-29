@@ -22,7 +22,7 @@ module Ising
 end
 
 module PerceptronEdTAP
-    include("perceptron/perceptron_edtap.jl")
+    include("../src/experimental/perceptron/perceptron_edtap.jl")
 end
 
 include("deeplearning/deep_binary.jl")

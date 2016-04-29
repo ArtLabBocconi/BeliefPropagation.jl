@@ -80,6 +80,49 @@ function Base.show{L <: Union{TapExactLayer,TapLayer}}(io::IO, layer::L)
     println(io, "my=$(allmy[1])")
 end
 
+getW(lay::AbstractLayer) = getWBinary(lay)
+getW(lay::BPRealLayer) = getWReal(lay)
+getWReal(lay::AbstractLayer) = lay.allm
+getWBinary(lay::AbstractLayer) = [Float64[1-2signbit(m) for m in magk]
+                        for magk in getWReal(lay)] # TODO return BitArray
+
+function energy(lay::OutputLayer, ξ::Vector, a)
+    @extract lay: labels
+    @assert length(ξ) == 1
+    return all((labels[a] .* ξ) .> 0) ? 0 : 1
+end
+
+forward(lay::AbstractLayer, ξ::Vector) = forwardBinary(lay, ξ)
+forward(lay::BPRealLayer, ξ::Vector) = forwardReal(lay, ξ)
+forward(lay::ParityLayer, ξ::Vector) = forwardParity(lay, ξ)
+
+function forwardBinary(lay::AbstractLayer, ξ::Vector)
+    @extract lay: N K
+    W = getWBinary(lay)
+    stability = map(w->dot(ξ, w), W)
+    σks = Int[ifelse(stability[k] > 0, 1, -1) for k=1:K]
+    return σks, stability
+end
+
+function forwardReal(lay::AbstractLayer, ξ::Vector)
+    @extract lay: N K
+    W = getWReal(lay)
+    stability = map(w->dot(ξ, w), W)
+    σks = Int[ifelse(stability[k] > 0, 1, -1) for k=1:K]
+    return σks, stability
+end
+
+function forwardParity(lay::AbstractLayer, ξ::Vector)
+    @extract lay: N K
+    @assert N==2
+    @assert K==1
+    W = getWReal(lay)
+    stability = 0.
+    σks = [sign(ξ[1]*ξ[2])]
+
+    return σks, stability
+end
+
 chain!(lay1::InputLayer, lay2::OutputLayer) = error("Cannot chain InputLayer and OutputLayer")
 
 function chain!(lay1::AbstractLayer, lay2::OutputLayer)
