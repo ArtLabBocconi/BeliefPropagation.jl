@@ -174,6 +174,9 @@ function updateVarW!(layer::BPRealLayer, k::Int, r::Float64=0.)
     h1 = allh1[k]
     h2 = allh2[k]
     Δ = 0.
+    # println("ranfeW $k, ",rangeW(layer,k))
+    # println("m $k, " ,m)
+
     for i in rangeW(layer,k)
         mhw = allmhcavtow[k][i]
         ρhw = allρhcavtow[k][i]
@@ -338,12 +341,14 @@ function maketree!(layer::BPRealLayer)
     @assert N % K == 0
     layer.istree = true
     for k=1:K
-        for i in rangeW(layer, k)
+        for i=1:N
+            (i in rangeW(layer, k)) && continue
             allm[k][i] = 0
         end
     end
     for k=1:K, a=1:M
-        for i in rangeW(layer, k)
+        for i=1:N
+            (i in rangeW(layer, k)) && continue
             allmcav[k][a][i] = 0
             allρcav[k][a][i] = 0
         end

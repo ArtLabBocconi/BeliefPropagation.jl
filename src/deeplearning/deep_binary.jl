@@ -313,10 +313,11 @@ end
 function solve(; K::Vector{Int} = [101,3], α::Float64=0.6
             , seedξ::Int=-1
             , dξ::Vector{Float64} = Float64[], nξ::Vector{Int} = Int[]
-            , kw...)
+            , maketree = false, kw...)
 
     seedξ > 0 && srand(seedξ)
     numW = length(K)==2 ? K[1]*K[2]  : sum(l->K[l]*K[l+1],1:length(K)-2)
+    maketree && (numW = div(numW, K[2]))
     N = K[1]
     ξ = zeros(K[1], 1)
 
@@ -352,7 +353,7 @@ function solve(; K::Vector{Int} = [101,3], α::Float64=0.6
     end
     @assert size(ξ) == (N, M)
     # println("Mean Overlap ξ $(meanoverlap(ξ))")
-    solve(ξ, σ; K=K, kw...)
+    solve(ξ, σ; K=K, maketree=maketree, kw...)
 end
 
 function solveMNIST(; α=0.01, K::Vector{Int} = [784,10], kw...)
