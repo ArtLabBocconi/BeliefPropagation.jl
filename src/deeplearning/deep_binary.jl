@@ -57,7 +57,7 @@ type FactorGraph
                 push!(layers, ParityLayer(K[l+1], K[l], M))
                 println("Created ParityLayer")
             elseif  layertype[l] == :bpreal
-                @assert l == L
+                @assert l == 1
                 push!(layers, BPRealLayer(K[l+1], K[l], M))
                 println("Created BPRealLayer")
             else
@@ -221,13 +221,19 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
 
     for it=1:maxiters
         Δ = update!(g, reinfpar.r, reinfpar.ry)
-        E, h = energy(g, mags(g))
-        @printf("it=%d \t r=%.3f ry=%.3f \t E=%d \t Δ=%f \n", it, reinfpar.r, reinfpar.ry, E, Δ)
+        E, h = energy(g)
+        Ereal, h = energy(g, mags(g))
+        @printf("it=%d \t r=%.3f ry=%.3f\t Ereal=%d \t E=%d \t Δ=%f \n"
+                , it, reinfpar.r, reinfpar.ry, Ereal, E, Δ)
         # println(h)
         plotinfo >=0  && plot_info(g, plotinfo)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
             println("Found Solution!")
+            break
+        end
+        if Ereal == 0  && typeof(g.layers[2]) == BPRealLayer
+            println("Found Real Solution!")
             break
         end
         if altconv && Δ < ϵ
@@ -393,7 +399,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 ry::Float64 = 0., ry_step::Float64= 0.0,
                 altsolv::Bool = true, altconv::Bool = false,
                 seed::Int = -1, plotinfo=-1,
-                β=Inf, βms = 1., rms = 1., ndrops = 0)
+                β=Inf, βms = 1., rms = 1., ndrops = 0, maketree=false)
 
     # for l=1:length(K)
     #     @assert K[l] % 2 == 1
@@ -402,6 +408,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
     g = FactorGraph(ξ, σ, K, layers, β=β, βms=βms, rms=rms, ndrops=ndrops)
     initrand!(g)
     fixtopbottom!(g)
+    maketree && maketree!(g.layers[2])
     reinfpar = ReinfParams(r, r_step, ry, ry_step)
 
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar,

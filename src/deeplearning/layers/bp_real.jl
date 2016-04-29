@@ -35,6 +35,8 @@ type BPRealLayer <: AbstractLayer
 
     top_layer::AbstractLayer
     bottom_layer::AbstractLayer
+
+    istree::Bool
 end
 
 
@@ -70,7 +72,7 @@ function BPRealLayer(K::Int, N::Int, M::Int)
         , allmhcavtow, allρhcavtow
         , allh1, allh2, allhy, allpu,allpd
         , VecVec(), VecVec()
-        , DummyLayer(), DummyLayer())
+        , DummyLayer(), DummyLayer(), false)
 end
 
 
@@ -125,7 +127,7 @@ function updateFact!(layer::BPRealLayer, k::Int)
             for i=1:N
                 Mcav = Mhtot - my[i]*m[i]
                 Ccav = Chtot - my[i]^2*ρ[i]^2
-                Ccav <= 0. && (print("*"); Ccav =1e-5)
+                Ccav <= 0. && (Ccav=1e-5)       #print("*"); )
                 x = Mcav / Ccav
                 gh = GH(pd[a], -x)
                 # @assert isfinite(gh)
@@ -172,7 +174,7 @@ function updateVarW!(layer::BPRealLayer, k::Int, r::Float64=0.)
     h1 = allh1[k]
     h2 = allh2[k]
     Δ = 0.
-    for i=1:N
+    for i in rangeW(layer,k)
         mhw = allmhcavtow[k][i]
         ρhw = allρhcavtow[k][i]
         mcav = allmcav[k]
@@ -316,5 +318,34 @@ function fixY!(layer::BPRealLayer, ξ::Matrix)
     end
     for a=1:M, k=1:K, i=1:N
         allmycav[a][k][i] = allmy[a][i]
+    end
+end
+
+function rangeW(layer::BPRealLayer, k)
+    @extract layer: N K istree
+    if istree
+        n = div(N,K)
+        return (k-1)*n+1:k*n
+    else
+        return 1:N
+    end
+end
+
+function maketree!(layer::BPRealLayer)
+    @extract layer: K N M allm allmy allmh allpu allpd top_allpd
+    @extract layer: allmcav allρcav allmycav allmhcavtow allρhcavtow allmhcavtoy
+
+    @assert N % K == 0
+    layer.istree = true
+    for k=1:K
+        for i in rangeW(layer, k)
+            allm[k][i] = 0
+        end
+    end
+    for k=1:K, a=1:M
+        for i in rangeW(layer, k)
+            allmcav[k][a][i] = 0
+            allρcav[k][a][i] = 0
+        end
     end
 end

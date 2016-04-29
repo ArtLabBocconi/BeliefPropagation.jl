@@ -101,12 +101,12 @@ end
 
 type ReinfParams
     r::Float64
-    r_step::Float64
+    rstep::Float64
     γ::Float64
-    γ_step::Float64
+    γstep::Float64
     tγ::Float64
     wait_count::Int
-    ReinfParams(r=0.,r_step=0.,γ=0.,γ_step=0.) = new(r, r_step, γ, γ_step, tanh(γ))
+    ReinfParams(r=0.,rstep=0.,γ=0.,γstep=0.) = new(r, rstep, γ, γstep, tanh(γ))
 end
 
 deg(f::Fact) = length(f.ηlist)
@@ -293,10 +293,10 @@ function update_reinforcement!(reinfpar::ReinfParams)
         reinfpar.wait_count += 1
     else
         if reinfpar.γ == 0.
-            reinfpar.r = 1 - (1-reinfpar.r) * (1-reinfpar.r_step)
+            reinfpar.r = 1 - (1-reinfpar.r) * (1-reinfpar.rstep)
         else
-            reinfpar.r *= 1 + reinfpar.r_step
-            reinfpar.γ *= 1 + reinfpar.γ_step
+            reinfpar.r *= 1 + reinfpar.rstep
+            reinfpar.γ *= 1 + reinfpar.γstep
             reinfpar.tγ = tanh(reinfpar.γ)
         end
     end
@@ -397,8 +397,8 @@ end
 
 function solve(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
                 method = :reinforcement, #[:reinforcement, :decimation]
-                r::Float64 = 0., r_step::Float64= 0.001,
-                γ::Float64 = 0., γ_step::Float64=0.,
+                r::Float64 = 0., rstep::Float64= 0.001,
+                γ::Float64 = 0., γstep::Float64=0.,
                 alt_when_solved::Bool = true,
                 seed::Int = -1)
     seed > 0 && srand(seed)
@@ -406,7 +406,7 @@ function solve(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
     initrand!(g)
     E = -1
     if method == :reinforcement
-        reinfpar = ReinfParams(r, r_step, γ, γ_step)
+        reinfpar = ReinfParams(r, rstep, γ, γstep)
         converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar, alt_when_solved=alt_when_solved)
     elseif method == :decimation
         converge!(g, maxiters=maxiters, ϵ=ϵ, alt_when_solved=alt_when_solved)
@@ -419,5 +419,6 @@ function solve(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
             (E == 0 || numdec == g.N) && break
         end
     end
+    E = energy(g)
     return E, getσ(mags(g))
 end

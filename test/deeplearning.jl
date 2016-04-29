@@ -26,6 +26,14 @@ for lay in [:tapex, :bpex]
     @test E == 0
 end
 
+### COMMITTEE CONTINUOUS FIRST LAYER
+@time g, W, E, stab = DeepBinary.solve(K=[301,5,1]
+                   , layers=[:bpreal,:bpex]
+                   ,r=0.2,r_step=0.002, ry=0.2, altconv=true, altsolv=true,seedξ=1,maxiters=1000, plotinfo=0,β=Inf, α=2.,maketree=false);
+
+Ereal, h = DeepBinary.energy(g, DeepBinary.mags(g))
+@test Ereal == 0
+
 ### 3 LAYERS
 @time g, W, E, stab = DeepBinary.solve(α=0.2, K=[401,21,3,1]
             , layers=[:tap,:tapex,:tapex]
