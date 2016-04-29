@@ -220,7 +220,7 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
     for it=1:maxiters
         Δ = update!(g, reinfpar.r, reinfpar.ry)
         E, h = energy(g)
-        @printf("it=%d \t r=%.3f ry=%.3f\t \t E=%d \t Δ=%f \n"
+        @printf("it=%d \t r=%.3f ry=%.3f \t E=%d \t Δ=%f \n"
                 , it, reinfpar.r, reinfpar.ry, E, Δ)
         # println(h)
         plotinfo >=0  && plot_info(g, plotinfo)

@@ -21,11 +21,20 @@ module Ising
     include("ising/learning_hopfield.jl")
 end
 
-module PerceptronEdTAP
-    include("../src/experimental/perceptron/perceptron_edtap.jl")
-end
 
 include("deeplearning/deep_binary.jl")
 
+
+############## EXPERIMENTAL #########################
+# module PerceptronEdTAP
+#     include("../src/experimental/perceptron/perceptron_edtap.jl")
+# end
+
+## ## EdTAP + Reinforcement
+## *Work In Progress*
+## Entropy driven TAP for binary perceptron.
+## ```julia
+## W = PerceptronTAP.solve(N=1001,α=0.7, γ=0.4, y=4., maxiters=1000);
+## ```
 
 end # module

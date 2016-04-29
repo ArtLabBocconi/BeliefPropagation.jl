@@ -24,12 +24,6 @@ g, W, E, stab = DeepBinary.solve(α=0.7, K=[1001,1]
             , layers=[:tap]
             ,r=.5,rstep=0.01, seedξ=1,maxiters=500);
 ```
-### EdTAP + Reinforcement
-*Work In Progress*  
-Entropy driven TAP for binary perceptron.
-```julia
-W = PerceptronTAP.solve(N=1001,α=0.7, γ=0.4, y=4., maxiters=1000);
-```
 
 ## Committee machine
 ```julia
