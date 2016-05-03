@@ -2,62 +2,9 @@
 Input from bottom.allpu and top.allpd
 and modifies its allpu and allpd
 """
-
-G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
-H(x) = erfc(x / √convert(typeof(x),2)) / 2
-#GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
-function GHapp(x)
-    y = 1/x
-    y2 = y^2
-    x + y * (1 - 2y2 * (1 - 5y2 * (1 - 7.4y2)))
-end
-GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
-
-# GH(1,x) =GH(x)
-function GH(p, x)
-    Hp = H(x); Hm = 1-Hp
-    Gp = G(x); Gm = Gp
-    (p*Gp - (1-p)*Gm) / (p*Hp + (1-p)*Hm)
-end
-# GH(1,x) =GH(x)
-function GH2(p, x)
-    Hp = H(x); Hm = 1-Hp
-    Gp = G(x); Gm = Gp
-    Gp / (p*Hp + (1-p)*Hm)
-end
-
-# function DH(p, x, y, C)
-#     Hpp = H(-(x+y)/C)
-#     Hpm = H(-(x-y)/C)
-#     Hmp = 1 - Hpp
-#     Hmm = 1 - Hpm
-#     (p*(Hpp - Hpm) + (1-p)*(Hmp - Hmm)) / (p*(Hpp + Hpm) + (1-p)*(Hmp + Hmm))
-# end
-#
-# function DH(p, x, C)
-#     Hp = H(-x/C)
-#     Hm = 1 - Hm
-#     (p*Hp - (1-p)*Hm) / (p*Hp  + (1-p)*Hm)
-# end
-
-function DH(p, x, y, C)
-    Hpp = H(-(x+y)/C)
-    Hpm = H(-(x-y)/C)
-    Hmp = 1 - Hpp
-    Hmm = 1 - Hpm
-    0.5 * log((p*Hpp+ (1-p)*Hmp) / (p*Hpm + (1-p)*Hmm))
-end
-
-myatanh(x) = atanh(x)
-
-
-
-abstract AbstractLayer
-
-myatanh(x::Float64) = ifelse(abs(x) > 15, ifelse(x>0,50,-50), atanh(x))
-
 ∞ = 10000
 
+abstract AbstractLayer
 type DummyLayer <: AbstractLayer
 end
 

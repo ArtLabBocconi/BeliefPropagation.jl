@@ -1,5 +1,4 @@
 module BeliefPropagation
-using LightGraphs
 import Base.show
 export KSATBP, Ising
 export PerceptronEdTAP
@@ -15,6 +14,7 @@ module KSATBP
 end
 
 module Ising
+using LightGraphs
     include("ising/ising_bp.jl")
     include("ising/ising_tap.jl")
     include("ising/ising_mc.jl")

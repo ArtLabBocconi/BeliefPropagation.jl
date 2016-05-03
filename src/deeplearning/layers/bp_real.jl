@@ -184,13 +184,16 @@ function updateVarW!(layer::BPRealLayer, k::Int, r::Float64=0.)
         ρcav = allρcav[k]
         h1[i] = sum(mhw) + r*h1[i]
         h2[i] = 1. + sum(ρhw) + r*h2[i]
-        h2[i]<0 && (print("![]!"); h2[i] = 1e-5)
+        # @assert h2[i] > 0.
+        h2[i]<0 && (print("![]!"); continue)
+        # h2[i]<0 && (print("![]!"); h2[i] = 1e-8)
         oldm = m[i]
         m[i] = h1[i] / h2[i]
         for a=1:M
             h1cav =  h1[i] - mhw[a]
             h2cav =  h2[i] - ρhw[a]
-            h2cav<0 && (print("!"); h2cav = 1e-5)
+            # h2cav<0 && (print("!"); h2cav = 1e-5)
+            h2cav<0 && (h2cav = 1e-8)
 
             mcav[a][i] = h1cav / h2cav
             ρcav[a][i] = 1 / h2cav
@@ -307,11 +310,11 @@ function initrand!(layer::BPRealLayer)
     # if!isbottomlayer
     for k=1:K,a=1:M,i=1:N
         allmcav[k][a][i] = allm[k][i]
-        allρcav[k][a][i] = 1e-5
+        allρcav[k][a][i] = 1e-1
 
         allmycav[a][k][i] = allmy[a][i]
         allmhcavtow[k][i][a] = allmh[k][a]*allmy[a][i]
-        allρhcavtow[k][i][a] = 1e-5
+        allρhcavtow[k][i][a] = 1e-1
         allmhcavtoy[a][i][k] = allmh[k][a]*allm[k][i]
     end
 

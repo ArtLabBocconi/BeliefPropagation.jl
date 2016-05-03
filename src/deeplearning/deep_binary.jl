@@ -14,6 +14,7 @@ typealias IVecVec Vector{IVec}
 typealias VecVecVec Vector{VecVec}
 typealias IVecVecVec Vector{IVecVec}
 
+include("../utils/functions.jl")
 include("layers.jl")
 include("dropout.jl")
 

@@ -1,4 +1,4 @@
-### PERCEPTRON
+## PERCEPTRON
 @time g, W, E, stab = DeepBinary.solve(α=0.5, K=[201,1]
             , layers=[:ms]
             ,r=1.,rstep=0.0, seedξ=1,maxiters=1000);
@@ -18,11 +18,11 @@ for lay in [:tap,:bp]
     @test E == 0
 end
 
-#### COMMITTEE
+### COMMITTEE
 for lay in [:tapex, :bpex]
     @time g, W, E, stab = DeepBinary.solve(α=0.2, K=[1001,7,1]
                 , layers=[:tap,lay]
-                ,r=.8,rstep=0.01, seedξ=1,maxiters=500);
+                ,r=.8,rstep=0.01, ry=0.3, seedξ=1,maxiters=500);
     @test E == 0
 end
 
@@ -43,10 +43,10 @@ end
             ,r=.95,rstep=0.001, seedξ=1,maxiters=2000);
 @test E == 0
 
-# too slow
-# @time g, W, E, stab = DeepBinary.solve(α=0.2, K=[401,21,3,1]
-#             , layers=[:tap,:bpex,:bpex]
-#             ,r=.95,rstep=0.005, seedξ=1,maxiters=1000);
-
+## too slow
+##  @time g, W, E, stab = DeepBinary.solve(α=0.2, K=[401,21,3,1]
+##              , layers=[:tap,:bpex,:bpex]
+##             ,r=.95,rstep=0.005, seedξ=1,maxiters=1000);
+##
 
 ###########################
