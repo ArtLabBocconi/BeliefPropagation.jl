@@ -98,7 +98,7 @@ function updateFact!(layer::BPExactLayer, k::Int)
             end
         end
 
-        vH = 2pdtop[a]-1
+        vH = tanh(pdtop[a])
         if !istoplayer(layer)
             s2P = Complex128(0.)
             s2M = Complex128(0.)
@@ -237,7 +237,7 @@ function updateFact!(layer::BPLayer, k::Int)
             Chtot = 1e-8
         end
         # println("Mhtot $a= $Mhtot pd=$(pd[a])")
-        @assert isfinite(pd[a]) "$(pd)"
+        # @assert isfinite(pd[a]) "$(pd)"
         # if pd[a]*Hp + (1-pd[a])*Hm <= 0.
         #     pd[a] -= 1e-8
         # end
@@ -316,10 +316,10 @@ function updateVarY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::Fl
         @assert pu >= 0 && pu <= 1 "$pu $i $a $(bottom_allpu[i])"
 
         hy[i] = sum(mhy) + ry* hy[i]
-        @assert isfinite(hy[i]) "isfinite(hy[i]) mhy=$mhy"
-        allpd[i][a] = (1+tanh(hy[i])) / 2
-        (allpd[i][a] < 0.) && (print("!y");allpd[i][a] = 1e-10)
-        (allpd[i][a] > 1.) && (print("!y");allpd[i][a] = 1-1e-10)
+        # @assert isfinite(hy[i]) "isfinite(hy[i]) mhy=$mhy"
+        allpd[i][a] = hy[i]
+        # (allpd[i][a] < 0.) && (print("!y");allpd[i][a] = 1e-10)
+        # (allpd[i][a] > 1.) && (print("!y");allpd[i][a] = 1-1e-10)
         @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
         # pinned from below (e.g. from input layer)
         if pu > 1-1e-10 || pu < 1e-10

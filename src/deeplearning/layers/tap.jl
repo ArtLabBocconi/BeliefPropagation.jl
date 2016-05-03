@@ -133,7 +133,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
             end
         end
 
-        vH = 2pdtop[a]-1
+        vH = tanh(pdtop[a])
         # if !istoplayer(layer)
             s2P = Complex128(0.)
             s2M = Complex128(0.)
@@ -169,13 +169,13 @@ function updateFact!(layer::TapExactLayer, k::Int)
             sr > 1 && (sr=1.)
             sr < -1 && (sr=-1.)
             if istoplayer(layer) && !isonlylayer(layer)
-                allpd[i][a] = (1 + (m[i] * sr))/2
+                allpd[i][a] = atanh(m[i]*sr)
             else
                 MYt[i] +=  atanh(m[i] * sr)
                 Mt[i] +=  atanh(my[i] * sr)
             end
             @assert isfinite(my[i])
-            @assert isfinite(allpd[i][a])
+            # @assert isfinite(allpd[i][a])
             @assert isfinite(sr)
             if !isfinite(MYt[i])
                 MYt[i] = MYt[i] > 0 ? 50 : -50
@@ -271,7 +271,7 @@ function updateFact!(layer::TapLayer, k::Int)
         if Chtot == 0
             Chtot = 1e-8
         end
-        @assert isfinite(pd[a]) "$(pd)"
+        # @assert isfinite(pd[a]) "$(pd)"
         # if pd[a]*Hp + (1-pd[a])*Hm <= 0.
         #     pd[a] -= 1e-8
         # end
@@ -343,9 +343,9 @@ function updateVarY!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::F
 
             #TODO inutile calcolarli per il primo layer
             hy[i] = MYt[i] + my[i] * CYt + ry* hy[i]
-            @assert isfinite(hy[i]) "MYt[i]=$(MYt[i]) my[i]=$(my[i]) CYt=$CYt hy[i]=$(hy[i])"
-            allpd[i][a] = (1+tanh(hy[i]))/2
-            @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
+            # @assert isfinite(hy[i]) "MYt[i]=$(MYt[i]) my[i]=$(my[i]) CYt=$CYt hy[i]=$(hy[i])"
+            allpd[i][a] = hy[i]
+            # @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
             # pinned from below (e.g. from input layer)
             if pu > 1-1e-10 || pu < 1e-10 # NOTE:1-e15 dà risultati peggiori
                 hy[i] = pu > 0.5 ? 100 : -100

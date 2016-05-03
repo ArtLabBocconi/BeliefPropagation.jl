@@ -109,7 +109,7 @@ function updateVarY!{L <: Union{MaxSumLayer}}(layer::L, a::Int, ry::Float64=0.)
 
         hy[i] = sum(mhy) + ry* hy[i]
         # isfinite(hy[i])
-        allpd[i][a] = (1+tanh(βms*hy[i]))/2
+        allpd[i][a] = βms*hy[i]
         # pinned from below (e.g. from input layer)
         hy[i] += atanh(2pu-1)/βms
         !isfinite(hy[i]) && (hy[i] = sign(hy[i]) * ∞ )
@@ -142,7 +142,7 @@ function updateFact!(layer::MaxSumLayer, k::Int)
         mcav = allmcav[k][a]
         mhw = allmhcavtow[k]
         mhy = allmhcavtoy[a]
-        ϕy = atanh(2pdtop[a]-1) / βms
+        ϕy = pdtop[a]
         !isfinite(ϕy) && (ϕy = sign(ϕy) * ∞)
         ϕy = round(Int, ϕy)
         ϕy == 0 && (ϕy += pdtop[a] > 0.5 ? 1 : -1)
