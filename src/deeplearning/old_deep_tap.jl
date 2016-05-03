@@ -78,18 +78,18 @@ end
 
 type ReinfParams
     r::Float64
-    r_step::Float64
+    rstep::Float64
     ry::Float64
-    ry_step::Float64
+    rystep::Float64
     wait_count::Int
-    ReinfParams(r=0., r_step=0., ry=0., ry_step=0.) = new(r, r_step, ry, ry_step, 0)
+    ReinfParams(r=0., rstep=0., ry=0., rystep=0.) = new(r, rstep, ry, rystep, 0)
 end
 function update_reinforcement!(reinfpar::ReinfParams)
     if reinfpar.wait_count < 10
         reinfpar.wait_count += 1
     else
-        reinfpar.r = 1 - (1-reinfpar.r) * (1-reinfpar.r_step)
-        reinfpar.ry = 1 - (1-reinfpar.ry) * (1-reinfpar.ry_step)
+        reinfpar.r = 1 - (1-reinfpar.r) * (1-reinfpar.rstep)
+        reinfpar.ry = 1 - (1-reinfpar.ry) * (1-reinfpar.rystep)
 
     end
 end
@@ -501,8 +501,8 @@ end
 
 function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
                 K::Vector{Int} = [101, 3], exactlayers=[2],
-                r::Float64 = 0., r_step::Float64= 0.001,
-                ry::Float64 = 0., ry_step::Float64= 0.0,
+                r::Float64 = 0., rstep::Float64= 0.001,
+                ry::Float64 = 0., rystep::Float64= 0.0,
                 altsolv::Bool = true, altconv::Bool = false,
                 seed::Int = -1)
     for l=1:length(K)
@@ -513,7 +513,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
     initrand!(g)
     g.exactlayers = exactlayers
     # if method == :reinforcement
-    reinfpar = ReinfParams(r, r_step, ry, ry_step)
+    reinfpar = ReinfParams(r, rstep, ry, rystep)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar,
             altsolv=altsolv, altconv=altconv)
     return getW(mags(g))
