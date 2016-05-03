@@ -144,6 +144,8 @@ function updateFact!(layer::TapExactLayer, k::Int)
             mUp = real(s2P - s2M) / real(s2P + s2M)
             @assert isfinite(mUp)
             allpu[k][a] = (1+mUp)/2
+            allpu[k][a] < 0. && (print("!"); allpu[k][a] = 1e-8)
+            allpu[k][a] > 1. && (print("!"); allpu[k][a] = 1-1e-8)
             mh[a] = real((1+vH)*s2P - (1-vH)*s2M) / real((1+vH)+s2P + (1-vH)*s2M)
         # end
 

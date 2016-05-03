@@ -114,6 +114,13 @@ function updateFact!(layer::BPRealLayer, k::Int)
         #     pd[a] -= 1e-8
         # end
         mh[a] = 1/√Chtot * GH(pd[a], -Mhtot / √Chtot)
+        if !istoplayer(layer)
+            pu = allpu[k]
+            pu[a] = H(-Mhtot / √Chtot)
+            # @assert isfinite(pu[a])
+            pu[a] < 0 && (pu[a]=1e-8) #print("!");
+            pu[a] > 1 && (pu[a]=1-1e-8) #print("!")
+        end
         # @assert isfinite(mh[a]) "isfinite(mh[a]) pd[a]= $(pd[a]) Mhtot=$Mhtot √Chtot=$(√Chtot)"
         if !isbottomlayer(layer)
             @assert false
