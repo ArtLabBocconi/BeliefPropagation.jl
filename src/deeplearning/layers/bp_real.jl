@@ -114,13 +114,6 @@ function updateFact!(layer::BPRealLayer, k::Int)
         #     pd[a] -= 1e-8
         # end
         mh[a] = 1/√Chtot * GH(pd[a], -Mhtot / √Chtot)
-        if !istoplayer(layer)
-            pu = allpu[k]
-            pu[a] = H(-Mhtot / √Chtot)
-            # @assert isfinite(pu[a])
-            pu[a] < 0 && (pu[a]=1e-8) #print("!");
-            pu[a] > 1 && (pu[a]=1-1e-8) #print("!")
-        end
         # @assert isfinite(mh[a]) "isfinite(mh[a]) pd[a]= $(pd[a]) Mhtot=$Mhtot √Chtot=$(√Chtot)"
         if !isbottomlayer(layer)
             @assert false
@@ -137,13 +130,7 @@ function updateFact!(layer::BPRealLayer, k::Int)
                 Ccav <= 0. && (Ccav=1e-5)       #print("*"); )
                 x = Mcav / Ccav
                 gh = GH(pd[a], -x)
-                # @assert isfinite(gh)
-                if !isfinite(gh)
-                    print("!")
-                    mhw[i][a] =  my[i]*(2pd[a]-1)*1e-2
-                    mhw[i][a] =  my[i]^2*1e-4
-                    continue
-                end
+                @assert isfinite(gh)
                 mhw[i][a] = my[i]/√Ccav * gh
                 ρhw[i][a] = my[i]^2/Ccav *(x*gh + gh^2) # -∂^2 log ν(W)
 
@@ -162,13 +149,7 @@ function updateFact!(layer::BPRealLayer, k::Int)
             # end
         end
 
-        if !istoplayer(layer)
-            pu = allpu[k]
-            pu[a] = H(-Mhtot / √Chtot)
-            # @assert isfinite(pu[a])
-            pu[a] < 0 && (pu[a]=1e-8)
-            pu[a] > 1 && (pu[a]=1-1e-8)
-        end
+        allpu[k][a] = atanh2Hm1(-Mhtot / √Chtot)
     end
 end
 
@@ -215,15 +196,14 @@ function initYBottom!(layer::BPRealLayer, a::Int)
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
-    # @assert false
+    @assert isbottomlayer(layer)
     my = allmy[a]
+    ξ = layer.bottom_layer.ξ
     for i=1:N
+        my[i] = ξ[i, a]
         mycav = allmycav[a]
-        pu = bottom_allpu[i][a];
-
-        my[i] = 2pu-1
         for k=1:K
-            mycav[k][i] = 2pu-1
+            mycav[k][i] = ξ[i, a]
         end
     end
 end
@@ -233,35 +213,25 @@ function updateVarY!(layer::BPRealLayer, a::Int, ry::Float64=0.)
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
+    @assert !isbottomlayer(layer)
+
     # @assert false
     my = allmy[a]
     hy = allhy[a]
     for i=1:N
         mhy = allmhcavtoy[a][i]
         mycav = allmycav[a]
-        pu = bottom_allpu[i][a];
-        @assert pu >= 0 && pu <= 1 "$pu $i $a $(bottom_allpu[i])"
 
         hy[i] = sum(mhy) + ry* hy[i]
         @assert isfinite(hy[i]) "isfinite(hy[i]) mhy=$mhy"
-        allpd[i][a] = (1+tanh(hy[i])) / 2
-        (allpd[i][a] < 0.) && (print("!y");allpd[i][a] = 1e-10)
-        (allpd[i][a] > 1.) && (print("!y");allpd[i][a] = 1-1e-10)
-        @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
-        # pinned from below (e.g. from input layer)
-        if pu > 1-1e-10 || pu < 1e-10
-            hy[i] = pu > 0.5 ? 100 : -100
-            my[i] = 2pu-1
-            for k=1:K
-                mycav[k][i] = 2pu-1
-            end
-        else
-            hy[i] += atanh(2*pu -1)
-            @assert isfinite(hy[i]) "isfinite(hy[i]) pu=$pu"
-            my[i] = tanh(hy[i])
-            for k=1:K
-                mycav[k][i] = tanh(hy[i]-mhy[k])
-            end
+        allpd[i][a] = hy[i]
+
+        pu = bottom_allpu[i][a];
+        hy[i] += pu
+        my[i] = tanh(hy[i])
+        @assert isfinite(my[i]) "isfinite(my[i]) pu=$pu"
+        for k=1:K
+            mycav[k][i] = tanh(hy[i]-mhy[k])
         end
     end
 end

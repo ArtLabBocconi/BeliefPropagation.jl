@@ -1,9 +1,23 @@
 type InputLayer <: AbstractLayer
     l::Int
     allpu::VecVec # p(σ=up) from fact ↑ to y
+    isbinary::Bool
+    ξ::Matrix
 end
 
-InputLayer(ξ::Matrix) = InputLayer(1,
-    [Float64[(1+ξ[i,a])/2 for a=1:size(ξ,2)] for i=1:size(ξ,1)])
+function InputLayer(ξ::Matrix)
+    isbinary = true
+    for x in ξ
+        if x != 1 && x != -1
+            isbinary = false
+            break
+        end
+    end
+    InputLayer(ξ, isbinary)
+end
+
+function InputLayer(ξ::Matrix, isbinary::Bool)
+    return InputLayer(1, VecVec(), isbinary, ξ)
+end
 
 initrand!(layer::InputLayer) = nothing

@@ -98,30 +98,53 @@ function updateVarY!{L <: Union{MaxSumLayer}}(layer::L, a::Int, ry::Float64=0.)
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
-
+    @assert !isbottomlayer(layer)
+    #TODO check βms
     # println("here")
     my = allmy[a]
     hy = allhy[a]
     for i=1:N
         mhy = allmhcavtoy[a][i]
         mycav = allmycav[a]
-        pu = bottom_allpu[i][a];
 
         hy[i] = sum(mhy) + ry* hy[i]
         # isfinite(hy[i])
         allpd[i][a] = βms*hy[i]
         # pinned from below (e.g. from input layer)
-        hy[i] += atanh(2pu-1)/βms
-        !isfinite(hy[i]) && (hy[i] = sign(hy[i]) * ∞ )
+        pu = bottom_allpu[i][a];
+        hy[i] += pu/βms
+        # !isfinite(hy[i]) && (hy[i] = sign(hy[i]) * ∞ )
         hy[i] = round(Int, hy[i])
         hy[i] += hy[i] == 0 ? rand([-1,1]) : 0
         my[i] = hy[i]
         for k=1:K
-            # mycav[k][i] = hy[i]-mhy[k]
+            # mycav[k][i] = hy[i]-mhy[k] #TODO
             mycav[k][i] = hy[i]
         end
     end
     # println("there")
+end
+
+
+function initYBottom!{L <: Union{MaxSumLayer}}(layer::L, a::Int, ry::Float64=0.)
+    @extract layer K N M allm allmy allmh allpu allpd allhy βms
+    @extract layer bottom_allpu top_allpd
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+    @assert isbottomlayer(layer)
+    #TODO check βms
+    my = allmy[a]
+    hy = allhy[a]
+    ξ = layer.bottom_layer.ξ
+    @assert layer.bottom_layer.isbinary
+    for i=1:N
+        hy[i] = sign(ξ[i, a]) * 100
+        my[i] = hy[i]
+        mycav = allmycav[a]
+        for k=1:K
+            mycav[k][i] = hy[i]
+        end
+    end
 end
 
 
@@ -180,7 +203,7 @@ function updateFact!(layer::MaxSumLayer, k::Int)
         Ep = Θ1(Mp - np + 2*xp)  + 2*S2p
         Em = Θ1(Mm - nm + 2*xm)  - 2*S2m
         ϕup = 0.5*(Ep-Em)
-        allpu[k][a] = (1+tanh(βms*ϕup))/2
+        allpu[k][a] = βms*ϕup
 
         ϕtot = 0.5*(Ep-Em + 2ϕy)
 

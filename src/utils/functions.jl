@@ -6,10 +6,23 @@ lg2 = log(2)
 
 # logcosh(x) = abs(x) > 30 ? abs(x) : log(cosh(x))
 myatanh(x) = atanh(x)
+myatanh(p,m) = _myatanh(p/(p+m), m/(p+m))
+function _myatanh(p,m)
+    # @assert p >= 0 "p >= 0 p=$p"
+    # @assert m >= 0
+    if m < 1e-10
+        return 0.5*(lg2 - log(2m))
+    elseif p < 1e-10
+        return -0.5*(lg2 - log(2p))
+    else
+        return atanh(p-m)
+    end
+end
+
 logcosh(x) = abs(x) > 600 ? abs(x) - lg2 : log(cosh(x))
 logsinhabs(x) = abs(x) > 600 ? abs(x) - lg2 : log(sinh(abs(x)))
 
-atanh2Hm1(x) = abs(x) > 8 ? -sign(x)*0.25*(log(2π) + x^2 + 2log(abs(x))) :
+atanh2Hm1(x) = abs(x) > 6 ? -sign(x)*0.25*(log(2π) + x^2 + 2log(abs(x))) :
                 atanh(2H(x)-1)
 
 function GHapp(x)

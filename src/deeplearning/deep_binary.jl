@@ -46,7 +46,7 @@ type FactorGraph
                 println("Created TapExactLayer")
             elseif  layertype[l] == :bp
                 push!(layers, BPLayer(K[l+1], K[l], M))
-                println("Created BPExactLayer")
+                println("Created BPLayer")
             elseif  layertype[l] == :bpex
                 push!(layers, BPExactLayer(K[l+1], K[l], M))
                 println("Created BPExactLayer")

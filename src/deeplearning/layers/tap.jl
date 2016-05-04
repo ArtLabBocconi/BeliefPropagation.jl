@@ -106,7 +106,6 @@ function updateFact!(layer::TapExactLayer, k::Int)
     Mt = Mtot[k]; Ct = Ctot;
     pdtop = top_allpd[k];
     CYt = CYtot
-    pubot = bottom_allpu;
     for a=1:M
         my = allmy[a]
         MYt = MYtot[a];
@@ -115,7 +114,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
             for p=1:N+1
                 for i=1:N
                     #TODO il termine di reazione si può anche omettere
-                    magY = 2pubot[i][a]-1
+                    magY = my[i]
                     magW = m[i]
                     pup = (1+magY*magW)/2
                     X[p] *= (1-pup) + pup*expf[p]
@@ -141,19 +140,17 @@ function updateFact!(layer::TapExactLayer, k::Int)
                 s2P += expinv2P[p] * X[p]
                 s2M += expinv2M[p] * X[p]
             end
-            mUp = real(s2P - s2M) / real(s2P + s2M)
-            @assert isfinite(mUp)
-            allpu[k][a] = (1+mUp)/2
-            allpu[k][a] < 0. && (allpu[k][a] = 1e-10); #print("!");
-            allpu[k][a] > 1. && (allpu[k][a] = 1-1e-10);# print("!");  
-            mh[a] = real((1+vH)*s2P - (1-vH)*s2M) / real((1+vH)+s2P + (1-vH)*s2M)
+            @assert real(s2P) > 0
+            @assert real(s2M) > 0
+            allpu[k][a] = myatanh(real(s2P), real(s2M))
+            mh[a] = real((1+vH)*s2P - (1-vH)*s2M) / real((1+vH)*s2P + (1-vH)*s2M)
         # end
 
 
         for i = 1:N
             # magY = istoplayer ? 2pubot[i][a]-1 : my[i]-mh[a]*m[i]*(1-my[i]^2)
             # magW = m[i]-mh[a]*my[i]*(1-m[i]^2)
-            magY = istoplayer(layer) ? 2pubot[i][a]-1 : my[i]
+            magY = my[i]
             magW = m[i]
             pup = (1+magY*magW)/2
 
@@ -168,8 +165,8 @@ function updateFact!(layer::TapExactLayer, k::Int)
             end
             pp = (1+vH)/2; pm = 1-pp
             sr = vH * real(s0 / (pp*(s0 + 2s2p) + pm*(s0 + 2s2m)))
-            sr > 1 && (sr=1.)
-            sr < -1 && (sr=-1.)
+            sr > 1 && (sr=1.) #print("!")
+            sr < -1 && (sr=-1.) #print("!")
             if istoplayer(layer) && !isonlylayer(layer)
                 allpd[i][a] = atanh(m[i]*sr)
             else
@@ -180,7 +177,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
             # @assert isfinite(allpd[i][a])
             @assert isfinite(sr)
             if !isfinite(MYt[i])
-                MYt[i] = MYt[i] > 0 ? 50 : -50
+                MYt[i] = MYt[i] > 0 ? 50 : -50 #print("!")
             end
         end
     end
@@ -269,14 +266,8 @@ function updateFact!(layer::TapLayer, k::Int)
         end
 
         Mhtot += -mh[a]*Chtot
+        Chtot == 0 && (print("!"); Chtot = 1e-8)
 
-        if Chtot == 0
-            Chtot = 1e-8
-        end
-        # @assert isfinite(pd[a]) "$(pd)"
-        # if pd[a]*Hp + (1-pd[a])*Hm <= 0.
-        #     pd[a] -= 1e-8
-        # end
         mh[a] = 1/√Chtot * GH(pd[a], -Mhtot / √Chtot)
         # mh[a] = DH(pd[a], Mhtot, √Chtot)
         if !isfinite(mh[a])
@@ -301,13 +292,8 @@ function updateFact!(layer::TapLayer, k::Int)
             Mt[i] += my[i] * mh[a]
         end
 
-        if !istoplayer(layer)
-            pu = allpu[k]
-            pu[a] = H(-Mhtot / √Chtot)
-            # @assert isfinite(pu[a])
-            pu[a] < 0 && (pu[a]=1e-8)
-            pu[a] > 1 && (pu[a]=1-1e-8)
-        end
+        # Message to top
+        allpu[k][a] = atanh2Hm1(-Mhtot / √Chtot)
     end
 end
 
@@ -337,34 +323,42 @@ function updateVarY!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::F
     @extract layer K N M allm allmy allmh allpu allpd
     @extract layer allhy CYtot MYtot Mtot Ctot bottom_allpu
 
+    @assert !isbottomlayer(layer)
+
     MYt=MYtot[a]; CYt = CYtot[a]; my=allmy[a]; hy=allhy[a]
-    if !isbottomlayer(layer)
-        for i=1:N
-            pu = bottom_allpu[i][a];
-            @assert pu >= 0 && pu <= 1 "$pu $i $a $(bottom_allpu[i])"
+    for i=1:N
+        # @assert pu >= 0 && pu <= 1 "$pu $i $a $(bottom_allpu[i])"
 
-            #TODO inutile calcolarli per il primo layer
-            hy[i] = MYt[i] + my[i] * CYt + ry* hy[i]
-            # @assert isfinite(hy[i]) "MYt[i]=$(MYt[i]) my[i]=$(my[i]) CYt=$CYt hy[i]=$(hy[i])"
-            allpd[i][a] = hy[i]
-            # @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
-            # pinned from below (e.g. from input layer)
-            if pu > 1-1e-10 || pu < 1e-10 # NOTE:1-e15 dà risultati peggiori
-                hy[i] = pu > 0.5 ? 100 : -100
-                my[i] = 2pu-1
+        #TODO inutile calcolarli per il primo layer
+        hy[i] = MYt[i] + my[i] * CYt + ry* hy[i]
+        # @assert isfinite(hy[i]) "MYt[i]=$(MYt[i]) my[i]=$(my[i]) CYt=$CYt hy[i]=$(hy[i])"
+        allpd[i][a] = hy[i]
+        # @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
+        # pinned from below (e.g. from input layer)
+        # if pu > 1-1e-10 || pu < 1e-10 # NOTE:1-e15 dà risultati peggiori
+        #     hy[i] = pu > 0.5 ? 100 : -100
+        #     my[i] = 2pu-1
+        #
+        # else
+        pu = bottom_allpu[i][a];
+        hy[i] += pu
+        my[i] = tanh(hy[i])
+        @assert isfinite(my[i]) "isfinite(my[i]) pu=$pu"
+        # end
+    end
+end
 
-            else
-                hy[i] += atanh(2*pu -1)
-                @assert isfinite(hy[i]) "isfinite(hy[i]) pu=$pu"
-                my[i] = tanh(hy[i])
-            end
-        end
-    else
-        for i=1:N
-            pu = bottom_allpu[i][a];
-            @assert pu >= 0 && pu <= 1 "$pu $i $a $(bottom_allpu[i])"
-            my[i] = 2pu-1
-        end
+
+function initYBottom!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::Float64=0.)
+    @extract layer K N M allm allmy allmh allpu allpd
+    @extract layer allhy CYtot MYtot Mtot Ctot bottom_allpu
+
+    @assert isbottomlayer(layer)
+
+    ξ = layer.bottom_layer.ξ
+    my=allmy[a]
+    for i=1:N
+        my[i] = ξ[i, a]
     end
 end
 
