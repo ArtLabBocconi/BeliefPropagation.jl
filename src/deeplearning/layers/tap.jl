@@ -133,19 +133,16 @@ function updateFact!(layer::TapExactLayer, k::Int)
         end
 
         vH = tanh(pdtop[a])
-        # if !istoplayer(layer)
-            s2P = Complex128(0.)
-            s2M = Complex128(0.)
-            for p=1:N+1
-                s2P += expinv2P[p] * X[p]
-                s2M += expinv2M[p] * X[p]
-            end
-            @assert real(s2P) > 0
-            @assert real(s2M) > 0
-            allpu[k][a] = myatanh(real(s2P), real(s2M))
-            mh[a] = real((1+vH)*s2P - (1-vH)*s2M) / real((1+vH)*s2P + (1-vH)*s2M)
-        # end
-
+        s2P = Complex128(0.)
+        s2M = Complex128(0.)
+        for p=1:N+1
+            s2P += expinv2P[p] * X[p]
+            s2M += expinv2M[p] * X[p]
+        end
+        s2PP = abs(real(s2P)) / (abs(real(s2P)) + abs(real(s2M)))
+        s2MM = abs(real(s2M)) / (abs(real(s2P)) + abs(real(s2M)))
+        allpu[k][a] = myatanh(s2PP, s2MM)
+        mh[a] = real((1+vH)*s2P - (1-vH)*s2M) / real((1+vH)*s2P + (1-vH)*s2M)
 
         for i = 1:N
             # magY = istoplayer ? 2pubot[i][a]-1 : my[i]-mh[a]*m[i]*(1-my[i]^2)
@@ -165,19 +162,20 @@ function updateFact!(layer::TapExactLayer, k::Int)
             end
             pp = (1+vH)/2; pm = 1-pp
             sr = vH * real(s0 / (pp*(s0 + 2s2p) + pm*(s0 + 2s2m)))
-            sr > 1 && (sr=1.) #print("!")
-            sr < -1 && (sr=-1.) #print("!")
-            if istoplayer(layer) && !isonlylayer(layer)
-                allpd[i][a] = atanh(m[i]*sr)
-            else
-                MYt[i] +=  atanh(m[i] * sr)
-                Mt[i] +=  atanh(my[i] * sr)
-            end
-            @assert isfinite(my[i])
-            # @assert isfinite(allpd[i][a])
             @assert isfinite(sr)
+            sr > 1 && (sr=1. - 1e-12) #print("!")
+            sr < -1 && (sr=-1. + 1e-12) #print("!")
+            # if istoplayer(layer) && !isonlylayer(layer)
+            #     allpd[i][a] = atanh(m[i]*sr)
+            # else
+            MYt[i] +=  atanh(m[i] * sr)
+            Mt[i] +=  atanh(my[i] * sr)
+            # end
+            # @assert isfinite(my[i])
+            # @assert isfinite(allpd[i][a])
             if !isfinite(MYt[i])
-                MYt[i] = MYt[i] > 0 ? 50 : -50 #print("!")
+                print("!")
+                MYt[i] = MYt[i] > 0 ? 50 : -50
             end
         end
     end
@@ -388,7 +386,7 @@ function update!{L <: Union{TapLayer,TapExactLayer}}(layer::L, r::Float64, ry::F
     end
 
     # bypass Y if toplayer
-    if !istoplayer(layer) && !isbottomlayer(layer)
+    if !isbottomlayer(layer)
         for a=1:M
             updateVarY!(layer, a, ry)
         end
