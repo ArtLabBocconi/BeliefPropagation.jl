@@ -126,7 +126,7 @@ getW(g::FactorGraph) = [getW(lay) for lay in g.layers[2:end-1]]
 
 function printvec(q::Vector{Float64}, head = "")
     print(head)
-    if length(q) < 20
+    if length(q) < 10
         for e in q
             @printf("%.6f ", e)
         end
@@ -227,7 +227,7 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
         plotinfo >=0  && plot_info(g, plotinfo)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
-            println("Found Solution!")
+            println("Found Solution: correctly classified $(g.M) patterns.")
             break
         end
         if altconv && Δ < ϵ
