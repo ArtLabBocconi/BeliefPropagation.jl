@@ -127,12 +127,12 @@ function updateFact!(layer::BPExactLayer, k::Int)
             sr > 1 && (sr=1.-1e-10) #print("!")
             sr < -1 && (sr=-1.+1e-10) #print("!")
             if !istoplayer(layer) || isonlylayer(layer)
-                mhw[i][a] =  atanh(mycav[i] * sr)
+                mhw[i][a] =  myatanh(mycav[i] * sr)
                 !isfinite(mhw[i][a]) && (mhw[i][a] = sign(mhw[i][a])*20) #print("!")
                 @assert isfinite(mhw[i][a]) "mhw[i][a]=$(mhw[i][a]) $(mycav[i]) $sr"
             end
             if !isbottomlayer(layer)
-                mhy[i][k] =  atanh(mcav[i] * sr)
+                mhy[i][k] =  myatanh(mcav[i] * sr)
                 !isfinite(mhy[i][k]) && (mhy[i][k] = sign(mhy[i][k])*20) #print("!")
                 @assert isfinite(mhy[i][k]) "mhy[i][k]=$(mhy[i][k]) $(mcav) $sr"
             end
@@ -244,6 +244,7 @@ function updateFact!(layer::BPLayer, k::Int)
             for i=1:N
                 Mcav = Mhtot - my[i]*m[i]
                 Ccav = sqrt(Chtot - (1-my[i]^2 * m[i]^2))
+                Ccav == 0 &&  (Ccav = 1e-8); # print("!")
                 # mhw[i][a] = my[i]/Ccav * GH(pd[a],-Mcav / Ccav)
                 gh = GH(pd[a],-Mcav / Ccav)
                 # mhw[i][a] = myatanh(my[i]/Ccav * gh)
@@ -251,6 +252,7 @@ function updateFact!(layer::BPLayer, k::Int)
                 @assert isfinite(gh)
                 mhw[i][a] = my[i]/Ccav * gh
                 mhy[i][k] = m[i]/Ccav * gh
+                @assert isfinite(mhy[i][k]) "isfinite(mhy[i][k]) gh=$gh Ccav=$Ccav"
             end
         else
             for i=1:N

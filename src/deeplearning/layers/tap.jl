@@ -168,15 +168,12 @@ function updateFact!(layer::TapExactLayer, k::Int)
             # if istoplayer(layer) && !isonlylayer(layer)
             #     allpd[i][a] = atanh(m[i]*sr)
             # else
-            MYt[i] +=  atanh(m[i] * sr)
-            Mt[i] +=  atanh(my[i] * sr)
+            MYt[i] +=  myatanh(m[i] * sr)
+            Mt[i] +=  myatanh(my[i] * sr)
             # end
             # @assert isfinite(my[i])
             # @assert isfinite(allpd[i][a])
-            if !isfinite(MYt[i])
-                print("!")
-                MYt[i] = MYt[i] > 0 ? 50 : -50
-            end
+            @assert isfinite(MYt[i])
         end
     end
 end
@@ -264,7 +261,7 @@ function updateFact!(layer::TapLayer, k::Int)
         end
 
         Mhtot += -mh[a]*Chtot
-        Chtot == 0 && (print("!"); Chtot = 1e-8)
+        Chtot == 0 && (Chtot = 1e-8) #;print("!");
 
         mh[a] = 1/√Chtot * GH(pd[a], -Mhtot / √Chtot)
         # mh[a] = DH(pd[a], Mhtot, √Chtot)
@@ -324,12 +321,15 @@ function updateVarY!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::F
     @assert !isbottomlayer(layer)
 
     MYt=MYtot[a]; CYt = CYtot[a]; my=allmy[a]; hy=allhy[a]
+    @assert isfinite(CYt) "CYt=$CYt"
     for i=1:N
         # @assert pu >= 0 && pu <= 1 "$pu $i $a $(bottom_allpu[i])"
-
+        @assert isfinite(MYt[i]) "MYt[i]=$(MYt[i]) "
+        @assert isfinite(my[i]) "my[i]=$(my[i]) "
         #TODO inutile calcolarli per il primo layer
+        @assert isfinite(hy[i])
         hy[i] = MYt[i] + my[i] * CYt + ry* hy[i]
-        # @assert isfinite(hy[i]) "MYt[i]=$(MYt[i]) my[i]=$(my[i]) CYt=$CYt hy[i]=$(hy[i])"
+        @assert isfinite(hy[i]) "MYt[i]=$(MYt[i]) my[i]=$(my[i]) CYt=$CYt hy[i]=$(hy[i])"
         allpd[i][a] = hy[i]
         # @assert isfinite(allpd[i][a]) "isfinite(allpd[i][a]) $(MYt[i]) $(my[i] * CYt) $(hy[i])"
         # pinned from below (e.g. from input layer)
@@ -340,8 +340,9 @@ function updateVarY!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::F
         # else
         pu = bottom_allpu[i][a];
         hy[i] += pu
+        @assert isfinite(hy[i]) "pu=$pu layer.l=$(layer.l)"
         my[i] = tanh(hy[i])
-        @assert isfinite(my[i]) "isfinite(my[i]) pu=$pu"
+        @assert isfinite(my[i]) "isfinite(my[i]) pu=$pu hy[i]=$(hy[i])"
         # end
     end
 end

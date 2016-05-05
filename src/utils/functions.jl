@@ -5,18 +5,29 @@ H(x) = erfc(x / √convert(typeof(x),2)) / 2
 lg2 = log(2)
 
 # logcosh(x) = abs(x) > 30 ? abs(x) : log(cosh(x))
-myatanh(x) = atanh(x)
+∞atanh = 25.
+
+function myatanh(x)
+    y = atanh(x)
+    return isfinite(y) ? y : sign(x)*∞atanh
+end
+
 myatanh(p,m) = _myatanh(p/(p+m), m/(p+m))
 function _myatanh(p,m)
     # @assert p >= 0 "p >= 0 p=$p"
     # @assert m >= 0
+    p == 0 && return -∞atanh
+    m == 0 && return ∞atanh
+    y = 0.
     if m < 1e-10
-        return 0.5*(lg2 - log(2m))
+        y = 0.5*(lg2 - log(2m))
     elseif p < 1e-10
-        return -0.5*(lg2 - log(2p))
+        y = -0.5*(lg2 - log(2p))
     else
-        return atanh(p-m)
+        y = atanh(p-m)
     end
+    @assert isfinite(y) "y=$y p=$p m=$m"
+    return y
 end
 
 logcosh(x) = abs(x) > 600 ? abs(x) - lg2 : log(cosh(x))
