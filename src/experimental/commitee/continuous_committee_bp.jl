@@ -41,7 +41,7 @@ type Fact
     mhb::VPMess  # to TopFact ↑
     ρhb::VPMess  # to TopFact ↑
 
-    ξ::SubArray
+    ξ::Vector{Float64}
 end
 Fact(ξ) = Fact(VMess(), VMess(),VMess(),VPMess(), VPMess(),VPMess(), VPMess(), ξ)
 
@@ -114,7 +114,7 @@ type FactorGraph
         N, M = size(ξ)
         @assert size(ξ, 2) == length(σ)
         println("# N=$N M=$M α=$(M/N)")
-        fnodes = [[Fact(sub(ξ, :, a)) for i=1:K] for a=1:M]
+        fnodes = [[Fact(ξ[:, a]) for i=1:K] for a=1:M]
         ynodes = [[VarY(0.) for i=1:K] for a=1:M]
         vnodes = [[Var(λ) for  j=1:N] for i=1:K]
         topfnodes = [TopFact(σ[a]) for a=1:M]

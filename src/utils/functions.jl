@@ -71,13 +71,7 @@ function GH(uσ, x)
     return res
 end
 
-# GH(1,x) =GH(x)
-# function GH2(p, x)
-#     Hp = H(x); Hm = 1-Hp
-#     Gp = G(x); Gm = Gp
-#     Gp / (p*Hp + (1-p)*Hm)
-# end
-
+# TODO approx
 function DH(σu, x, y, C)
     p = (1+tanh(σu)) /2
     Hpp = H(-(x+y)/C)
@@ -86,17 +80,3 @@ function DH(σu, x, y, C)
     Hmm = 1 - Hpm
     (p*(Hpp - Hpm) + (1-p)*(Hmp - Hmm)) / (p*(Hpp + Hpm) + (1-p)*(Hmp + Hmm))
 end
-#
-# function DH(p, x, C)
-#     Hp = H(-x/C)
-#     Hm = 1 - Hm
-#     (p*Hp - (1-p)*Hm) / (p*Hp  + (1-p)*Hm)
-# end
-
-# function DH(p, x, y, C)
-#     Hpp = H(-(x+y)/C)
-#     Hpm = H(-(x-y)/C)
-#     Hmp = 1 - Hpp
-#     Hmm = 1 - Hpm
-#     0.5 * log((p*Hpp+ (1-p)*Hmp) / (p*Hpm + (1-p)*Hmm))
-# end

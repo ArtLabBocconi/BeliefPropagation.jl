@@ -116,7 +116,11 @@ function update!(g::FactorGraph, r::Float64, ry::Float64)
     Δ = 0.# Updating layer $(lay.l)")
     for l=2:g.L+1
         dropout!(g, l+1)
-        δ = update!(g.layers[l], r, ry)
+        # rl = l > 2 ? r/l : r
+        # ryl = l*ry
+        rl = r
+        ryl = ry
+        δ = update!(g.layers[l], rl, ryl)
         Δ = max(δ, Δ)
     end
     return Δ

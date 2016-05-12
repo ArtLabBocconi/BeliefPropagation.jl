@@ -38,9 +38,9 @@ GH(x, β) = β == Inf ? GH(x) : GHapp(x, β) #x > 30.0 ? GHapp(x, β) : G(x, β)
 GHapp(x, β) = exp(log(G(x, β)) - log(H(x, β)))
 type Fact
     m::VMess
-    ρ::VMess
+    mt::VMess
     mh::VPMess
-    ρh::VPMess
+    mht::VPMess
     ξ::Vector{Float64}
     σ::Int
 end
@@ -49,17 +49,15 @@ Fact(ξ, σ) = Fact(VMess(),VMess(), VPMess(), VPMess(), ξ, σ)
 
 type Var
     mh::VMess
-    ρh::VMess
+    mht::VMess
     m::VPMess
-    ρ::VPMess
-    λ::Float64 #L2 regularization
+    mt::VPMess
 
-    #used only in BP+reinforcement
-    h1::Mess
-    h2::Mess
+    h::Float64
+    ht::Float64
 end
 
-Var() = Var(VMess(), VMess(), VPMess(), VPMess(), 0., Mess(0), Mess(0))
+Var() = Var(VMess(), VMess(), VPMess(), VPMess(), 0., 0.)
 
 type FactorGraph
     N::Int
@@ -75,22 +73,21 @@ type FactorGraph
         M = length(σ)
         @assert size(ξ, 2) == M
         println("# N=$N M=$M α=$(M/N)")
-        fnodes = [Fact(ξ[:, a], σ[a]) for a=1:M]
+        fnodes = [Fact(ξ[:,a], σ[a]) for a=1:M]
         vnodes = [Var() for i=1:N]
 
         ## Reserve memory in order to avoid invalidation of Refs
         for (a,f) in enumerate(fnodes)
             sizehint!(f.m, N)
-            sizehint!(f.ρ, N)
+            sizehint!(f.mt, N)
             sizehint!(f.mh, N)
-            sizehint!(f.ρh, N)
+            sizehint!(f.mht, N)
         end
         for (i,v) in enumerate(vnodes)
             sizehint!(v.m, M)
-            sizehint!(v.ρ, M)
+            sizehint!(v.mt, M)
             sizehint!(v.mh, M)
-            sizehint!(v.ρh, M)
-            v.λ = λ
+            sizehint!(v.mht, M)
         end
 
         for i=1:N, a=1:M
@@ -98,14 +95,14 @@ type FactorGraph
             v = vnodes[i]
 
             push!(v.mh, Mess())
-            push!(v.ρh, Mess())
+            push!(v.mht, Mess())
             push!(f.mh, getref(v.mh, length(v.mh)))
-            push!(f.ρh, getref(v.ρh, length(v.ρh)))
+            push!(f.mht, getref(v.mht, length(v.mht)))
 
             push!(f.m, Mess())
-            push!(f.ρ, Mess())
+            push!(f.mt, Mess())
             push!(v.m, getref(f.m, length(f.m)))
-            push!(v.ρ, getref(f.ρ, length(f.ρ)))
+            push!(v.mt, getref(f.mt, length(f.mt)))
         end
 
         new(N, M, β, ξ, σ, fnodes, vnodes)
@@ -117,72 +114,95 @@ type ReinfParams
     rstep::Float64
     γ::Float64
     γstep::Float64
-    tγ::Float64
     wait_count::Int
-    ReinfParams(r=0.,rstep=0.,γ=0.,γstep=0.) = new(r, rstep, γ, γstep, tanh(γ))
+    ReinfParams(r,rstep,γ,γstep) = new(r, rstep, γ, γstep, 0)
 end
 
 deg(f::Fact) = length(f.m)
 deg(v::Var) = length(v.m)
 
 function initrand!(g::FactorGraph)
+    ϵ = 1e-1
     for f in g.fnodes
-        f.m[:] = (2*rand(deg(f)) - 1)/2
-        f.ρ[:] = 1e-5
+        f.m[:] = randn()*ϵ
+        f.mt[:] = randn()*ϵ
     end
     for v in g.vnodes
-        v.mh[:] = (2*rand(deg(v)) - 1)/2
-        v.ρh[:] = 1e-5
+        v.mh[:] = randn()*ϵ
+        v.mht[:] = randn()*ϵ
     end
 end
 
-#TODO
 function update!(f::Fact, β)
-    @extract f m mh ρ ρh σ ξ
+    @extract f m mh mt mht σ ξ
     M = 0.
     C = 0.
+
+    ## Update mh
     for i=1:deg(f)
         M += ξ[i]*m[i]
-        C += ξ[i]^2*ρ[i]
+        C += ξ[i]^2*(1-m[i]^2)
     end
     for i=1:deg(f)
         Mcav = M - ξ[i]*m[i]
-        Ccav = C - ξ[i]^2*ρ[i]
+        Ccav = C - ξ[i]^2*(1-m[i]^2)
         Ccav <= 0. && (print("*"); Ccav =1e-5)
-        sqrtC = sqrt(Ccav)
-        x = σ*Mcav / sqrt(Ccav)
+        sqC = sqrt(Ccav)
+        x = σ*Mcav / sqC
         gh = GH(-x, β)
         @assert isfinite(gh)
-        mh[i][] = σ*ξ[i]/sqrtC * gh
-        ρh[i][] = (ξ[i]/sqrtC)^2 *(x*gh + gh^2) # -∂^2 log ν(W)
+        mh[i][] = σ*ξ[i]/sqC * gh
         @assert isfinite(mh[i][])
-        @assert isfinite(ρh[i][])
+    end
+
+    M = 0.
+    C = 0.
+    ## Update mht
+    for i=1:deg(f)
+        M += ξ[i]*mt[i]
+        C += ξ[i]^2*(1-mt[i]^2)
+    end
+    for i=1:deg(f)
+        Mcav = M - ξ[i]*mt[i]
+        Ccav = C - ξ[i]^2*(1-mt[i]^2)
+        Ccav <= 0. && (print("*"); Ccav =1e-5)
+        sqC = sqrt(Ccav)
+        x = σ*Mcav / sqC
+        gh = GH(-x, β)
+        @assert isfinite(gh)
+        mht[i][] = σ*ξ[i]/sqC * gh
+        @assert isfinite(mht[i][])
     end
 end
 
-function update!(v::Var, r::Float64 = 0.)
-    @extract v m mh ρ ρh λ h1 h2
+function update!(v::Var, r::Float64, γ::Float64)
+    @extract v m mh mt mht
     Δ = 0.
+    h = sum(mh)
+    ht = sum(mht)
+    uToCenter = atanh(tanh(γ)*tanh(h))
+    uToPeriph = atanh(tanh(γ)*tanh(ht + (r-1)*uToCenter))
+    h += uToPeriph
+    ht += r*uToCenter
 
-    v.h1 = sum(mh) + r*h1
-    v.h2 = λ + sum(ρh) + r*h2
-    # @assert v.h2 > 0 "$(v.h2)"
-    v.h2<0 && (print("!"); v.h2 = 1e-5)
+    Δ = max(Δ, abs(h - v.h))
+    v.h = h
+    Δ = max(Δ, abs(ht - v.ht))
+    v.ht = ht
     ### compute cavity fields
+    # update m
     for a=1:deg(v)
-        h1 = v.h1 - mh[a]
-        h2 = v.h2 - ρh[a]
-        newm = h1 / h2
-        oldm = m[a][]
-        Δ = max(Δ, abs(newm - oldm))
-        m[a][] = newm
-        ρ[a][] = 1/h2
+        m[a][] = tanh(h - mh[a])
+    end
+    # update mt
+    for a=1:deg(v)
+        mt[a][] = tanh(ht - mht[a])
     end
 
     Δ
 end
 
-function oneBPiter!(g::FactorGraph, r::Float64=0.)
+function oneBPiter!(g::FactorGraph, reinf::ReinfParams)
     Δ = 0.
 
     for a=randperm(g.M)
@@ -190,24 +210,19 @@ function oneBPiter!(g::FactorGraph, r::Float64=0.)
     end
 
     for i=randperm(g.N)
-        d = update!(g.vnodes[i], r)
+        d = update!(g.vnodes[i], reinf.r, reinf.γ)
         Δ = max(Δ, d)
     end
 
     Δ
 end
 
-function update_reinforcement!(reinfpar::ReinfParams)
-    if reinfpar.wait_count < 10
-        reinfpar.wait_count += 1
+function update_reinforcement!(reinf::ReinfParams)
+    if reinf.wait_count < 10
+        reinf.wait_count += 1
     else
-        if reinfpar.γ == 0.
-            reinfpar.r = 1 - (1-reinfpar.r) * (1-reinfpar.rstep)
-        else
-            reinfpar.r *= 1 + reinfpar.rstep
-            reinfpar.γ *= 1 + reinfpar.γstep
-            reinfpar.tγ = tanh(reinfpar.γ)
-        end
+        reinf.r *= 1 + reinf.rstep
+        reinf.γ *= 1 + reinf.γstep
     end
 end
 
@@ -215,16 +230,16 @@ getW(mags::Vector) = Int[1-2signbit(m) for m in mags]
 
 function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
                                 , altsolv::Bool=false, altconv = true
-                                 , reinfpar::ReinfParams=ReinfParams())
+                                 , reinf::ReinfParams=ReinfParams())
 
     for it=1:maxiters
         print("it=$it ... ")
-        Δ = oneBPiter!(g, reinfpar.r)
+        Δ = oneBPiter!(g, reinf)
         E = energy(g)
-        Etrunc = energy_trunc(g)
-        @printf("r=%.3f γ=%.3f  E(W=mags)=%d E(trunc W)=%d   \tΔ=%f \n", reinfpar.r, reinfpar.γ, E, Etrunc, Δ)
-        update_reinforcement!(reinfpar)
-        if altsolv && E == 0
+        Et = energyt(g)
+        @printf("r=%.3f γ=%.3f  E(W̃)=%d E(W)=%d   \tΔ=%f \n", reinf.r, reinf.γ, E, Et, Δ)
+        update_reinforcement!(reinf)
+        if altsolv && (E == 0 || Et == 0)
             println("Found Solution!")
             break
         end
@@ -243,70 +258,28 @@ function energy(g::FactorGraph, W::Vector)
     E
 end
 
-energy(g::FactorGraph) = energy(g, mags(g))
-energy_trunc(g::FactorGraph) = energy(g, getW(mags(g)))
+energy(g::FactorGraph) = energy(g, getW(mags(g)))
+energyt(g::FactorGraph) = energy(g, getW(magst(g)))
 
 function mag(v::Var)
-    m = v.h1/v.h2
+    m = tanh(v.h)
     @assert isfinite(m)
     return m
 end
-#
-# function mag_noreinf(v::Var)
-#     ispinned(v) && return float(v.pinned)
-#     πp, πm = πpm(v)
-#     πp /= v.ηreinfp
-#     πm /= v.ηreinfm
-#     m = (πp - πm) / (πm + πp)
-#     # @assert isfinite(m)
-#     return m
-# end
 
-mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
-# mags_noreinf(g::FactorGraph) = Float64[mag_noreinf(v) for v in g.vnodes]
-
-
-# function batch_renorm!(ξ)
-#     N, M = size(ξ)
-#     μ = zeros(N)
-#     σ = zeros(N)
-#     for i=1:N
-#         μ[i] = mean(ξ[i,:])
-#     end
-#     for i=1:N
-#         μ[i] = mean(ξ[i,:])
-#     end
-# end
-
-
-function solve_test(; N::Int=1000, α::Float64=0.6, biasξ = 0., seedξ::Int=-1, kw...)
-    seedξ > 0 && srand(seedξ)
-    M = round(Int, α * N)
-    # ξ = rand([-1.,1.], N, M)
-    ξ = randn(N, M)
-    # σ = rand([-1,1], M)
-    σ = zeros(Int, M)
-    for a=1:M
-        σ[a] = ξ[1, a] > biasξ ? 1 : -1
-    end
-    if biasξ != 0
-        ξnew = ones(N+1, M)
-        ξnew[1:N, 1:M] = ξ
-        ξ = ξnew
-    end
-
-    solve(ξ, σ; kw...)
+function magt(v::Var)
+    m = tanh(v.ht)
+    @assert isfinite(m)
+    return m
 end
 
-function solve(; N::Int=1000, α::Float64=0.6, biasξ = 0., seedξ::Int=-1, kw...)
+mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
+magst(g::FactorGraph) = Float64[magt(v) for v in g.vnodes]
+
+function solve(; N::Int=1000, α::Float64=0.6, seedξ::Int=-1, kw...)
     seedξ > 0 && srand(seedξ)
     M = round(Int, α * N)
-    ξ = rand([-1.,1.], N, M) + biasξ
-    if biasξ != 0
-        ξnew = ones(N+1, M)
-        ξnew[1:N, 1:M] = ξ
-        ξ = ξnew
-    end
+    ξ = rand([-1.,1.], N, M)
 
     # ξ = randn(N, M)
     σ = rand([-1,1], M)
@@ -315,18 +288,19 @@ end
 
 function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
                 method = :reinforcement, #[:reinforcement, :decimation]
-                r::Float64 = 0., rstep::Float64= 0.001,
-                λ::Float64 = 1., β = Inf,
+                r::Float64 = 0., rstep::Float64= 0.00,
+                γ::Float64 = 0.2, γstep::Float64= 0.00,
+                β = Inf,
                 altsolv::Bool = true, altconv = true,
                 seed::Int = -1)
 
     seed > 0 && srand(seed)
-    g = FactorGraph(ξ, σ, λ, β=β)
+    g = FactorGraph(ξ, σ, β=β)
     initrand!(g)
 
     # if method == :reinforcement
-    reinfpar = ReinfParams(r, rstep)
-    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar
+    reinf = ReinfParams(r, rstep, γ, γstep)
+    converge!(g, maxiters=maxiters, ϵ=ϵ, reinf=reinf
             , altsolv=altsolv, altconv=altconv)
-    return mags(g)
+    return mags(g), magst(g)
 end
