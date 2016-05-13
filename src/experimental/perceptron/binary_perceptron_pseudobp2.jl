@@ -150,53 +150,48 @@ let mdict = Dict{Int,Vector{Float64}}(), mtdict = Dict{Int,Vector{Float64}}()
     global update!
     function update!(f::Fact, β)
         @extract f mh mht σ ξ
-        M = 0.
-        C = 0.
+        uσ = mtanh(σ*Inf)
+
         m = Base.@get!(mdict, deg(f), Array(Float64, deg(f)))
         mt = Base.@get!(mtdict, deg(f), Array(Float64, deg(f)))
         @inbounds for i=1:deg(f)
             m[i] = f.m[i] # trasformo i Mag64 in float per non fare tanh ogni volta
             mt[i] = f.mt[i] # trasformo i Mag64 in float per non fare tanh ogni volta
         end
-        ## Update mh
+
+        M = Mt = C = Ct = 0.
         @inbounds for i=1:deg(f)
             M += ξ[i]*m[i]
             C += ξ[i]^2*(1-m[i]^2)
+            Mt += ξ[i]*mt[i]
+            Ct += ξ[i]^2*(1-mt[i]^2)
         end
-        f.mhtot = σ/√C*GH(-σ*M / √C, β)
+
+        sqC = √(2C)
+        mp = M / sqC
+        f.mhtot = erfmix(uσ, mp, mp)
+
+        sqC = √(2Ct)
+        mp = Mt / sqC
+        f.mhttot = erfmix(uσ, mp, mp)
+
         @inbounds for i=1:deg(f)
             Mcav = M - ξ[i]*m[i]
             Ccav = C - ξ[i]^2*(1-m[i]^2)
-            Ccav <= 0. && (print("*"); Ccav =1e-8)
-            sqC = sqrt(Ccav)
-            x = σ*Mcav / sqC
-            gh = GH(-x, β)
-            @assert isfinite(gh)
-            mh[i][] = mtanh(σ*ξ[i]/sqC * gh)
-            @assert isfinite(mh[i][])
-        end
+            sqC = √(2Ccav)
+            mp = (Mcav + ξ[i]) / sqC
+            mm = (Mcav - ξ[i]) / sqC
+            mh[i][] = erfmix(uσ, mp, mm)
 
-        M = 0.
-        C = 0.
-        ## Update mht
-        @inbounds for i=1:deg(f)
-            M += ξ[i]*mt[i]
-            C += ξ[i]^2*(1-mt[i]^2)
-        end
-        f.mhttot = σ/√C* GH(-σ*M / √C, β)
-
-        @inbounds for i=1:deg(f)
-            Mcav = M - ξ[i]*mt[i]
-            Ccav = C - ξ[i]^2*(1-mt[i]^2)
-            Ccav <= 0. && (print("*"); Ccav =1e-8)
-            sqC = sqrt(Ccav)
-            x = σ*Mcav / sqC
-            gh = GH(-x, β)
-            @assert isfinite(gh)
-            mht[i][] = mtanh(σ*ξ[i]/sqC * gh)
-            @assert isfinite(mht[i][])
+            Mcav = Mt - ξ[i]*mt[i]
+            Ccav = Ct - ξ[i]^2*(1-mt[i]^2)
+            sqC = √(2Ccav)
+            mp = (Mcav + ξ[i]) / sqC
+            mm = (Mcav - ξ[i]) / sqC
+            mht[i][] = erfmix(uσ, mp, mm)
         end
     end
+
 end #let
 
 function update!(v::Var, y::Float64, γ::Float64)
@@ -204,7 +199,7 @@ function update!(v::Var, y::Float64, γ::Float64)
     Δ = 0.
     # h = reduce(⊗, mh)
     # ht = reduce(⊗, mht)
-    h = Mess(0.);ht = Mess(0.);
+    h = Mess(0.); ht = Mess(0.);
     @inbounds for i=1:deg(v)
         h = h ⊗ mh[i]
         ht = ht ⊗ mht[i]
@@ -317,6 +312,36 @@ function *(tf::ThermFunc, x::Number)
     newtf
 end
 /(tf::ThermFunc, x::Number) = tf*(1/x)
+
+# ϕ = Σext + y*Σint  (a T=0)
+function free_entropy(f::Fact)
+    @extract f mh mht σ ξ
+    uσ = mtanh(σ*Inf)
+    m = map(Float64, f.m)
+    mt = map(Float64, f.mt) # trasformo i Mag64 in float per non fare tanh ogni volta
+
+    Σext = Σext = 0.
+    M = Mt = C = Ct = 0.
+    @inbounds for i=1:deg(f)
+        M += ξ[i]*m[i]
+        C += ξ[i]^2*(1-m[i]^2)
+        Mt += ξ[i]*mt[i]
+        Ct += ξ[i]^2*(1-mt[i]^2)
+    end
+
+    b = merf(M / √(2C))
+    bt = merf(Mt / √(2Ct))
+    Σint -= log1pxy(uσ, b)
+    Σext -= log1pxy(uσ, bt)
+
+    for i = 1:deg(f)
+        #f += log((1+vh[i])/2 * (1+u[i])/2 + (1-vh[i])/2 * (1-u[i])/2)
+        #f += log((1 + vh[i] * u[i]) / 2)
+        Σint += log1pxy(f.m[i], mh[i][])
+        Σext += log1pxy(f.mt[i], mht[i][])
+    end
+
+end
 
 type OrderParams
     m::Float64
