@@ -128,10 +128,10 @@ type ReinfParams
     r::Float64
     r_step::Float64
     γ::Float64
-    γ_step::Float64
+    γstep::Float64
     tγ::Float64
     wait_count::Int
-    ReinfParams(r=0., r_step=0., γ=0., γ_step=0.) = new(r, r_step, γ, γ_step, tanh(γ))
+    ReinfParams(r=0., r_step=0., γ=0., γstep=0.) = new(r, r_step, γ, γstep, tanh(γ))
 end
 
 function initrand!(g::FactorGraphTAP)
@@ -617,7 +617,7 @@ function update_reinforcement!(reinfpar::ReinfParams)
             reinfpar.r = 1 - (1-reinfpar.r) * (1-reinfpar.r_step)
         else
             reinfpar.r *= 1 + reinfpar.r_step
-            reinfpar.γ *= 1 + reinfpar.γ_step
+            reinfpar.γ *= 1 + reinfpar.γstep
             reinfpar.tγ = tanh(reinfpar.γ)
         end
     end
@@ -671,9 +671,9 @@ mags(g::FactorGraphTAP) = g.m
 # mags_noreinf(g::FactorGraphTAP) = Float64[mag_noreinf(v) for v in g.vnodes]
 
 
-function solve(; N::Int=1000, α = 0.6, seed_ξ = -1, kw...)
-    if seed_ξ > 0
-        srand(seed_ξ)
+function solve(; N::Int=1000, α = 0.6, seedξ = -1, kw...)
+    if seedξ > 0
+        srand(seedξ)
     end
     M = round(Int, α * N)
     ξ = rand([-1.,1.], N, M)
@@ -683,8 +683,8 @@ end
 
 function solve(ξ::Matrix{Float64}, σ::Vector{Int}; maxiters = 10000, ϵ = 1e-4,
                 method = :reinforcement, #[:reinforcement, :decimation]
-                y = 0., y_step = 0.001,
-                γ = 0., γ_step = 0.,
+                y = 0., ystep = 0.001,
+                γ = 0., γstep = 0.,
                 altsolv::Bool = true,
                 altconv::Bool = true,
                 n= 100,
@@ -695,7 +695,7 @@ function solve(ξ::Matrix{Float64}, σ::Vector{Int}; maxiters = 10000, ϵ = 1e-4
     initrand!(g)
 
     # if method == :reinforcement
-    reinfpar = ReinfParams(y, y_step, γ, γ_step)
+    reinfpar = ReinfParams(y, ystep, γ, γstep)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar
             , altsolv=altsolv, altconv=altconv)
     return g, getW(mags(g))
@@ -753,12 +753,12 @@ function span(;N=2001, lstα = 0.5, lstγ = 0., n=100, y=0.,
 	return results
 end
 
-include("../deeplearning/deep_binary.jl")
+include("../../deeplearning/deep_binary.jl")
 function span_committe(;K=[301,5], α = 0.2, lstγ = 0.
         , n=100, dx=0.1
         , y=0.
         , ϵ = 1e-4, maxiters = 200, seedξ = -1, resfile = "pf_committee.new.txt"
-        , ry = 0.3, ry_step = 0.01, dump=0.
+        , ry = 0.3, rystep = 0.01, dump=0.
         , loadξτ = "", saveξτ = "")
 	global nint = n
     global interval = map(x->sign(x)*abs(x)^2, -1:dx:1) .* ∞
@@ -775,12 +775,12 @@ function span_committe(;K=[301,5], α = 0.2, lstγ = 0.
         ξ = rand([-1.,1.], N, M)
         σ = ones(Int, M)
         g_deep, W_deep, E_deep, _ = DeepBinary.solve(ξ, σ; K=K,layers=[:tap,:bpex]
-                           , ry=ry, ry_step=ry_step, r_step=0., ϵ=1e-5
+                           , ry=ry, rystep=rystep, r_step=0., ϵ=1e-5
                            , plotinfo=0, maxiters=20000, altsolv=false, altconv=true)
         τ = [Int[convert(Int, sign(g_deep.layers[3].allmy[a][k])) for a=1:M] for k=1:K[2]]
         if saveξτ != ""
             save(saveξτ, "ξ", ξ, "τ", τ, "seedξ", seedξ
-                , "ry", ry, "ry_step", ry_step)
+                , "ry", ry, "rystep", rystep)
         end
     else
         d = load(loadξτ)
