@@ -1,14 +1,18 @@
 module Pseudo
 
+include("../../utils/MagnetizationsT.jl")
+using .MagnetizationsT
+
 using MacroUtils
 import Base: *,/
-typealias Mess Float64
+typealias Mess Mag64
 typealias P Ptr{Mess}
 typealias VMess Vector{Mess}
 typealias VPMess Vector{P}
 
 Base.getindex(p::Ptr) = unsafe_load(p)
 Base.setindex!{T}(p::Ptr{T}, x::T) = unsafe_store!(p, x)
+Base.setindex!{T}(p::Ptr{T}, x) = unsafe_store!(p, convert(T,x))
 Base.show(io::IO, p::Ptr) = show(io, p[])
 Base.show(p::Ptr) = show(p[])
 
@@ -45,8 +49,8 @@ type Fact
     mht::VPMess
     ξ::Vector{Float64}
     σ::Int
-    mhtot::Float64
-    mhttot::Float64
+    mhtot::Mess
+    mhttot::Mess
 end
 
 Fact(ξ, σ) = Fact(VMess(),VMess(), VPMess(), VPMess(), ξ, σ, 0.,0.)
@@ -57,11 +61,11 @@ type Var
     m::VPMess
     mt::VPMess
 
-    h::Float64
-    ht::Float64
+    mtot::Mess
+    mttot::Mess
 
-    uToC::Float64 # u to Center
-    uToP::Float64 # u to Periphery
+    uToC::Mess # u to Center
+    uToP::Mess # u to Periphery
 end
 
 Var() = Var(VMess(), VMess(), VPMess(), VPMess(), zeros(4)...)
@@ -141,74 +145,83 @@ function initrand!(g::FactorGraph)
     end
 end
 
-function update!(f::Fact, β)
-    @extract f m mh mt mht σ ξ
-    M = 0.
-    C = 0.
 
-    ## Update mh
-    for i=1:deg(f)
-        M += ξ[i]*m[i]
-        C += ξ[i]^2*(1-m[i]^2)
-    end
-    f.mhtot = σ/√C*GH(-σ*M / √C, β)
+let mdict = Dict{Int,Vector{Float64}}(), mtdict = Dict{Int,Vector{Float64}}()
+    global update!
+    function update!(f::Fact, β)
+        @extract f mh mht σ ξ
+        uσ = mtanh(σ*Inf)
 
-    for i=1:deg(f)
-        Mcav = M - ξ[i]*m[i]
-        Ccav = C - ξ[i]^2*(1-m[i]^2)
-        Ccav <= 0. && (print("*"); Ccav =1e-8)
-        sqC = sqrt(Ccav)
-        x = σ*Mcav / sqC
-        gh = GH(-x, β)
-        @assert isfinite(gh)
-        mh[i][] = σ*ξ[i]/sqC * gh
-        @assert isfinite(mh[i][])
+        m = Base.@get!(mdict, deg(f), Array(Float64, deg(f)))
+        mt = Base.@get!(mtdict, deg(f), Array(Float64, deg(f)))
+        @inbounds for i=1:deg(f)
+            m[i] = f.m[i] # trasformo i Mag64 in float per non fare tanh ogni volta
+            mt[i] = f.mt[i] # trasformo i Mag64 in float per non fare tanh ogni volta
+        end
+
+        M = Mt = C = Ct = 0.
+        @inbounds for i=1:deg(f)
+            M += ξ[i]*m[i]
+            C += ξ[i]^2*(1-m[i]^2)
+            Mt += ξ[i]*mt[i]
+            Ct += ξ[i]^2*(1-mt[i]^2)
+        end
+
+        sqC = √(2C)
+        mp = M / sqC
+        f.mhtot = erfmix(uσ, mp, mp)
+
+        sqC = √(2Ct)
+        mp = Mt / sqC
+        f.mhttot = erfmix(uσ, mp, mp)
+
+        @inbounds for i=1:deg(f)
+            Mcav = M - ξ[i]*m[i]
+            Ccav = C - ξ[i]^2*(1-m[i]^2)
+            sqC = √(2Ccav)
+            mp = (Mcav + ξ[i]) / sqC
+            mm = (Mcav - ξ[i]) / sqC
+            mh[i][] = erfmix(uσ, mp, mm)
+
+            Mcav = Mt - ξ[i]*mt[i]
+            Ccav = Ct - ξ[i]^2*(1-mt[i]^2)
+            sqC = √(2Ccav)
+            mp = (Mcav + ξ[i]) / sqC
+            mm = (Mcav - ξ[i]) / sqC
+            mht[i][] = erfmix(uσ, mp, mm)
+        end
     end
 
-    M = 0.
-    C = 0.
-    ## Update mht
-    for i=1:deg(f)
-        M += ξ[i]*mt[i]
-        C += ξ[i]^2*(1-mt[i]^2)
-    end
-    f.mhttot = σ/√C* GH(-σ*M / √C, β)
-
-    for i=1:deg(f)
-        Mcav = M - ξ[i]*mt[i]
-        Ccav = C - ξ[i]^2*(1-mt[i]^2)
-        Ccav <= 0. && (print("*"); Ccav =1e-8)
-        sqC = sqrt(Ccav)
-        x = σ*Mcav / sqC
-        gh = GH(-x, β)
-        @assert isfinite(gh)
-        mht[i][] = σ*ξ[i]/sqC * gh
-        @assert isfinite(mht[i][])
-    end
-end
+end #let
 
 function update!(v::Var, y::Float64, γ::Float64)
     @extract v m mh mt mht
     Δ = 0.
-    h = sum(mh)
-    ht = sum(mht)
-    v.uToC = atanh(tanh(γ)*tanh(h))
-    v.uToP = atanh(tanh(γ)*tanh(ht + (y-1)*v.uToC))
-    h += v.uToP
-    ht += y*v.uToC
+    # h = reduce(⊗, mh)
+    # ht = reduce(⊗, mht)
+    h = Mess(0.); ht = Mess(0.);
+    @inbounds for i=1:deg(v)
+        h = h ⊗ mh[i]
+        ht = ht ⊗ mht[i]
+    end
+    pol = mtanh(γ)
+    v.uToC = pol * h
+    v.uToP = pol * (ht ⊗ v.uToC↑(y-1))
 
-    Δ = max(Δ, abs(h - v.h))
-    v.h = h
-    Δ = max(Δ, abs(ht - v.ht))
-    v.ht = ht
+    h = h ⊗ v.uToP
+    ht = ht ⊗ v.uToC↑y
+
+    Δ = max(Δ, abs(h - v.mtot), abs(ht - v.mttot))
+    v.mtot = h
+    v.mttot = ht
     ### compute cavity fields
     # update m
     for a=1:deg(v)
-        m[a][] = tanh(h - mh[a])
+        m[a][] = h ⊘ mh[a]
     end
     # update mt
     for a=1:deg(v)
-        mt[a][] = tanh(ht - mht[a])
+        mt[a][] = ht ⊘ mht[a]
     end
 
     Δ
@@ -272,22 +285,15 @@ end
 energy(g::FactorGraph) = energy(g, getW(mags(g)))
 energyt(g::FactorGraph) = energy(g, getW(magst(g)))
 
-function mag(v::Var)
-    m = tanh(v.h)
-    @assert isfinite(m)
-    return m
-end
-
-function magt(v::Var)
-    m = tanh(v.ht)
-    @assert isfinite(m)
-    return m
-end
+mag(v::Var) = Float64(v.mtot)
+magt(v::Var) = Float64(v.mttot)
+magh(f::Fact) = Float64(f.mhtot)
+maght(f::Fact) = Float64(f.mhttot)
 
 mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
 magst(g::FactorGraph) = Float64[magt(v) for v in g.vnodes]
-magsh(g::FactorGraph) = Float64[f.mhtot for f in g.fnodes]
-magsht(g::FactorGraph) = Float64[f.mhttot for f in g.fnodes]
+magsh(g::FactorGraph) = Float64[magh(f) for f in g.fnodes]
+magsht(g::FactorGraph) = Float64[maght(f) for f in g.fnodes]
 
 type ThermFunc
     ϕ::Float64 # ϕ = Σext + y*Σint  (a T=0)
@@ -306,6 +312,79 @@ function *(tf::ThermFunc, x::Number)
     newtf
 end
 /(tf::ThermFunc, x::Number) = tf*(1/x)
+
+function free_entropy(f::Fact, y)
+    @extract f: mh mht σ ξ
+    uσ = mtanh(σ*Inf)
+    m = map(Float64, f.m)
+    mt = map(Float64, f.mt) # trasformo i Mag64 in float per non fare tanh ogni volta
+
+    ϕext = ϕint = 0.
+    M = Mt = C = Ct = 0.
+    @inbounds for i=1:deg(f)
+        M += ξ[i]*m[i]
+        C += ξ[i]^2*(1-m[i]^2)
+        Mt += ξ[i]*mt[i]
+        Ct += ξ[i]^2*(1-mt[i]^2)
+    end
+
+    b = merf(M / √(2C))
+    bt = merf(Mt / √(2Ct))
+    ϕint += log1pxy(uσ, b)
+    ϕext += log1pxy(uσ, bt)
+
+    for i = 1:deg(f)
+        ϕint -= log1pxy(f.m[i], mh[i][])
+        ϕext -= log1pxy(f.mt[i], mht[i][])
+    end
+    ϕ = ϕext + y*ϕint
+    Σint = ϕint
+    return ϕ, Σint
+end
+
+function free_entropy(v::Var, y, γ)
+    @extract v: mh mht m mt mtot mttot uToC uToP
+    ϕext = ϕint = Σint = 0.
+    pol = mtanh(γ)
+
+    ϕint += logZ(uToP, mh)
+
+    ϕext += logZ(uToC, mht, y)
+    Σint += atanh(uToC)*v.mttot - log2cosh(atanh(uToC))
+
+    ϕint += -log1pxy(pol, -pol) / 2 + log(2)/2
+    mcav = mtot ⊘ uToP
+    ϕint += -log1pxy(mcav, uToP)
+
+    ϕ = ϕext + y*ϕint
+    Σint += ϕint
+    return ϕ, Σint
+end
+
+function ThermFunc(g::FactorGraph)
+    @extract g: fnodes vnodes M N reinf
+    @extract reinf: γ y
+    ϕ = Σint = 0.
+    for f in fnodes
+        phi, sig = free_entropy(f, y)
+        ϕ += phi
+        Σint += sig
+    end
+
+    for v in vnodes
+        phi, sig = free_entropy(v, y, γ)
+        ϕ += phi
+        Σint += sig
+    end
+    ϕ /= N
+    Σint /= N
+    op = OrderParams(g)
+    Σint -= γ*op.s
+    ϕ -= y*γ*op.s
+    Σext = ϕ - y*Σint
+
+    return ThermFunc(ϕ, Σext, Σint, 0., 0.)
+end
 
 type OrderParams
     m::Float64
@@ -327,6 +406,7 @@ OrderParams()=OrderParams(zeros(14)...)
 
 function OrderParams(g::FactorGraph)
     y, γ = g.reinf.y, g.reinf.γ
+    pol = mtanh(γ)
     m = mean(mags(g))
     mt = mean(magst(g))
     mh = sum(magsh(g))
@@ -337,12 +417,9 @@ function OrderParams(g::FactorGraph)
     q1=0.
     s = 0.
     for v in g.vnodes
-        h1=v.h-v.uToP
-        h2=v.ht-v.uToC
-        t1 = tanh(h1)
-        t2 = tanh(h2)
-        tγ = tanh(γ)
-        s += (tγ + t1*t2)/ (1+t1*t2*tγ)
+        m1 = Float64(v.mtot ⊘ v.uToP)
+        m2 = Float64(v.mtot ⊘ v.uToC)
+        s += (pol + m1*m2)/ (1+m1*m2*pol)
     end
     s /= g.N
     OrderParams(m,mt,q0,q1,qt,s,st,mh,mht,zeros(5)...)
@@ -354,61 +431,6 @@ function shortshow(io::IO, x)
 end
 Base.show(io::IO, op::OrderParams) = shortshow(io, op)
 Base.show(io::IO, op::ThermFunc) = shortshow(io, op)
-
-function ThermFunc(g)
-    tf = ThermFunc()
-    y, γ = g.reinf.y, g.reinf.γ
-    for f in g.fnodes
-        M=Mt=C=Ct=0.
-        ξ = f.ξ; σ = f.σ; m=f.m; mt=f.mt
-        for i=1:deg(f)
-            M += ξ[i]*m[i]
-            C += ξ[i]^2*(1-m[i]^2)
-            Mt += ξ[i]*mt[i]
-            Ct += ξ[i]^2*(1-mt[i]^2)
-        end
-        tf.ϕ += y*log(H(-σ*M/√C, g.β))
-        tf.ϕ += log(H(-σ*Mt/√Ct, g.β))
-    end
-
-    s = 0.
-    for v in g.vnodes
-        # phi nodes
-        tf.ϕ += y*log(2cosh(v.h))
-        tf.ϕ += log(2cosh(v.ht))
-
-        # phi factors
-        h1=v.h-v.uToP
-        h2=v.ht-v.uToC
-        t1 = tanh(h1)
-        t2 = tanh(h2)
-        tγ = tanh(γ)
-        tf.ϕ += y*log(4cosh(γ)*cosh(h1)*cosh(h2)*(1 +t1*t2*tγ))
-
-        # phi edges
-        tf.ϕ += y*log(2cosh(v.uToC +(v.ht-v.uToC)))
-        tf.ϕ += y*log(2cosh(v.uToP +(v.h-v.uToP)))
-    end
-
-    for a=1:g.M
-        f = g.fnodes[a]
-        Δϕ = 0.
-        for i=1:g.N
-            v = g.vnodes[i]
-            mh = v.mh[a]
-            m = f.m[i]
-            Δϕ += y*log(cosh(mh) + m*sinh(mh))
-            mht = v.mht[a]
-            mt = f.mt[i]
-            Δϕ += log(cosh(mht) + mt*sinh(mht))
-        end
-        tf.ϕ += Δϕ
-    end
-    op = OrderParams(g)
-    tf.ϕ += - y*γ*op.s*g.N
-
-    return tf / g.N
-end
 
 function solve(; N::Int=1000, α::Float64=0.6, seedξ::Int=-1, kw...)
     seedξ > 0 && srand(seedξ)

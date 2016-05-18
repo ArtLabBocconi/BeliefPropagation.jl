@@ -1,6 +1,6 @@
 export Mag64, mfill, mflatp, mrand, damp, reinforce, ⊗, ⊘, ↑, sign0,
        merf, exactmix, erfmix, mtanh, log1pxy, mcrossentropy,
-       logZ, forcedmag, showinner, parseinner, magformat
+       logZ, forcedmag, showinner, parseinner, magformat, log2cosh
 
 using Base.Intrinsics
 
@@ -82,3 +82,6 @@ end
 logZ(u::Vector{Mag64}) = logZ(zero(Mag64), u)
 
 ↑(m::Mag64, x::Real) = mtanh(x * atanh(m))
+
+lr(x::Float64) = log1p(exp(-2abs(x)))
+log2cosh(x::Float64) = abs(x) + lr(x)

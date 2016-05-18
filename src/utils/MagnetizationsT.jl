@@ -36,9 +36,6 @@ reinforce(m0::Mag64, γ::Float64) = f2m(m2f(m0) * γ)
 
 damp(newx::Mag64, oldx::Mag64, λ::Float64) = f2m(m2f(newx) * (1 - λ) + m2f(oldx) * λ)
 
-lr(x::Float64) = log1p(exp(-2abs(x)))
-log2cosh(x::Float64) = abs(x) + lr(x)
-
 function (*)(x::Mag64, y::Mag64)
     ax = m2f(x)
     ay = m2f(y)
@@ -52,7 +49,7 @@ function (*)(x::Mag64, y::Mag64)
     else # ax < ay && ax < -ay
         t1 = -2ay
     end
-    
+
     t2 = isinf(ax) || isinf(ay) ?
          0.0 : lr(ax + ay) - lr(ax - ay)
 
@@ -130,7 +127,7 @@ function auxmix(H::Mag64, a₊::Float64, a₋::Float64)
                 t2 = 0.0
             end
         else # isinf(a₊) && isinf(a₋)
-            if (sign(a₊) == sign(aH) && sign(a₊) == sign(aH)) || (sign(a₊) ≠ sign(aH) && sign(a₊) ≠ sign(aH)) 
+            if (sign(a₊) == sign(aH) && sign(a₊) == sign(aH)) || (sign(a₊) ≠ sign(aH) && sign(a₊) ≠ sign(aH))
                 t1 = 0.0
                 t2 = 0.0
             elseif sign(a₊) == sign(aH) # && sign(a₋) ≠ sign(aH)
@@ -167,6 +164,7 @@ function erfmix(H::Mag64, m₊::Float64, m₋::Float64)
 end
 
 # log((1 + x * y) / 2)
+# == log2cosh(atanh(x) + atanh(y)) - log2cosh(atanh(x)) - log2cosh(atanh(y))
 function log1pxy(x::Mag64, y::Mag64)
     ax = m2f(x)
     ay = m2f(y)
@@ -185,7 +183,7 @@ end
 #
 # with atanh's:
 #
-# == -ay * tanh(ax) + log(2cosh(ay)) 
+# == -ay * tanh(ax) + log(2cosh(ay))
 function mcrossentropy(x::Mag64, y::Mag64)
     tx = tanh(m2f(x))
     ay = m2f(y)
@@ -193,30 +191,28 @@ function mcrossentropy(x::Mag64, y::Mag64)
            sign(tx) ≠ sign(ay) ? Inf : 0.0
 end
 
-function logZ(u0::Mag64, u::Vector{Mag64})
+function logZ(u0::Mag64, u::Vector{Mag64}, y::Float64=1.)
     a0 = m2f(u0)
     if !isinf(a0)
-        s1 = a0
-        s2 = abs(a0)
-        s3 = lr(a0)
-        hasinf = 0
+        s1 = y*a0
+        s2 = y*log2cosh(a0)
+        hasinf = 0.
     else
-        s1 = s2 = s3 = 0.0
+        s1 = s2 = 0.0
         hasinf = sign(a0)
     end
     for ui in u
         ai = m2f(ui)
         if !isinf(ai)
             s1 += ai
-            s2 += abs(ai)
-            s3 += lr(ai)
+            s2 += log2cosh(ai)
         elseif hasinf == 0
             hasinf = sign(ai)
         elseif hasinf ≠ sign(ai)
             return -Inf
         end
     end
-    return abs(s1) - s2 + lr(s1) - s3
+    return log2cosh(s1) - s2
 end
 
 end
