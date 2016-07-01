@@ -57,6 +57,13 @@ After each convergence of the BP algorithm the `r*N` most biased variables are f
 ```julia
 E, σ = KSATBP.solve(method=:decimation, N=10000,α=9.6, k=4, seed_cnf=19, r=0.02, maxiters=1000);
 ```
+## Matching
+Solve random instances of the Bipartite Minimum Matching problem
+```julia
+E, σ = Matching.solve(N=200, γ=30., maxiters=1000);
+```
+`matchmap[i] = j`  if `(i,j)` is in the optimal matching
+The cutoff on the costs is  2γ.
 
 ## Ising
 BP on pairwise Ising. Preliminary work

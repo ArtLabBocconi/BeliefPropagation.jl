@@ -3,6 +3,7 @@ import Base.show
 export KSATBP, Ising
 export PerceptronEdTAP
 export DeepBinary
+export Matching
 
 Base.getindex(p::Ptr) = unsafe_load(p)
 Base.setindex!{T}(p::Ptr{T}, x::T) = unsafe_store!(p, x)
@@ -11,6 +12,10 @@ Base.show(p::Ptr) = show(p[])
 
 module KSATBP
     include("ksat/ksat_bp.jl")
+end
+
+module Matching
+    include("matching/matching_bp.jl")
 end
 
 module Ising

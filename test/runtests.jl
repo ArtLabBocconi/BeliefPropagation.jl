@@ -8,11 +8,15 @@ println("@ Testing Functions...")
 println("@ ... done.")
 
 println("@ Testing DeepLearning...")
-include("deeplearning.jl")
+# include("deeplearning.jl")
 println("@ ... done.")
 
 println("@ Testing KSAT...")
 # include("ksat.jl")
+println("@ ... done.")
+
+println("@ Testing Matching...")
+include("matching.jl")
 println("@ ... done.")
 
 println("@ ALL TESTS PASSED!")
