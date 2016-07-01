@@ -2,6 +2,7 @@ module Pseudo
 
 include("../../utils/MagnetizationsT.jl")
 using .MagnetizationsT
+include("../../utils/functions.jl")
 
 using MacroUtils
 import Base: *,/
@@ -19,29 +20,31 @@ Base.show(p::Ptr) = show(p[])
 getref(v::Vector, i::Integer) = pointer(v, i)
 Mess() = Mess(0.)
 
-G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
-H(x) = erfc(x / √convert(typeof(x),2)) / 2
-#GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
-function GHapp(x)
-    # print("ghapp")
-    y = 1/x
-    y2 = y^2
-    x + y * (1 - 2y2 * (1 - 5y2 * (1 - 7.4y2)))
-end
-GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
 
-G(x, β) = (1 - exp(-β)) * G(x)
-H(x,β) = (eb=exp(-β); eb + (1-eb)*H(x))
-GH(x, β) = β == Inf ? GH(x) : GHapp(x, β) #x > 30.0 ? GHapp(x, β) : G(x, β) / H(x, β)
-# function GHapp(x, β)
+# G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
+# H(x) = erfc(x / √convert(typeof(x),2)) / 2
+# #GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
+# function GHapp(x)
 #     # print("ghapp")
-#     # NOTE: not a very good approximation when x is large and β is not
 #     y = 1/x
 #     y2 = y^2
-#     a = e^(-β + (x^2)/2) / ((1 - e^(-β)) * √(2π))
-#     return x / (x * a + 1 - y2 * (1 - 3y2 * (1 - 5y2)))
+#     x + y * (1 - 2y2 * (1 - 5y2 * (1 - 7.4y2)))
 # end
-GHapp(x, β) = exp(log(G(x, β)) - log(H(x, β)))
+# GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
+#
+# G(x, β) = (1 - exp(-β)) * G(x)
+# H(x,β) = (eb=exp(-β); eb + (1-eb)*H(x))
+# GH(x, β) = β == Inf ? GH(x) : GHapp(x, β) #x > 30.0 ? GHapp(x, β) : G(x, β) / H(x, β)
+# # function GHapp(x, β)
+# #     # print("ghapp")
+# #     # NOTE: not a very good approximation when x is large and β is not
+# #     y = 1/x
+# #     y2 = y^2
+# #     a = e^(-β + (x^2)/2) / ((1 - e^(-β)) * √(2π))
+# #     return x / (x * a + 1 - y2 * (1 - 3y2 * (1 - 5y2)))
+# # end
+# GHapp(x, β) = exp(log(G(x, β)) - log(H(x, β)))
+
 type Fact
     m::VMess
     mt::VMess
@@ -175,20 +178,33 @@ let mdict = Dict{Int,Vector{Float64}}(), mtdict = Dict{Int,Vector{Float64}}()
         mp = Mt / sqC
         f.mhttot = erfmix(uσ, mp, mp)
 
+        dump = 0.5
         @inbounds for i=1:deg(f)
             Mcav = M - ξ[i]*m[i]
             Ccav = C - ξ[i]^2*(1-m[i]^2)
-            sqC = √(2Ccav)
-            mp = (Mcav + ξ[i]) / sqC
-            mm = (Mcav - ξ[i]) / sqC
-            mh[i][] = erfmix(uσ, mp, mm)
+
+            #sqC = √(2Ccav)
+            # mp = (Mcav + ξ[i]) / sqC
+            # mm = (Mcav - ξ[i]) / sqC
+            # newm = erfmix(uσ, mp, mm)
+            sqC = √(Ccav)
+            x = Mcav / sqC
+            newm = mtanh(ξ[i] / sqC * GH(atanh(uσ), -x))
+
+            mh[i][] = damp(newm, mh[i][], dump)
 
             Mcav = Mt - ξ[i]*mt[i]
             Ccav = Ct - ξ[i]^2*(1-mt[i]^2)
-            sqC = √(2Ccav)
-            mp = (Mcav + ξ[i]) / sqC
-            mm = (Mcav - ξ[i]) / sqC
-            mht[i][] = erfmix(uσ, mp, mm)
+            # sqC = √(2Ccav)
+            # mp = (Mcav + ξ[i]) / sqC
+            # mm = (Mcav - ξ[i]) / sqC
+            # newm = erfmix(uσ, mp, mm)
+            #
+            sqC = √(Ccav)
+            x = Mcav / sqC
+            newm = mtanh(ξ[i] / sqC * GH(atanh(uσ), -x))
+
+            mht[i][] = damp(newm, mht[i][], dump)
         end
     end
 
@@ -245,8 +261,9 @@ end
 
 function update_reinforcement!(reinf::ReinfParams)
     reinf.y *= 1 + reinf.ystep
-    reinf.γ *= 1 + reinf.γstep
-    return reinf.ystep != 0. || reinf.ystep != 0
+    reinf.γ += reinf.γstep
+    updated = !(reinf.ystep == 0. && reinf.γstep == 0)
+    return updated
 end
 
 getW(mags::Vector) = Int[1-2signbit(m) for m in mags]
@@ -270,8 +287,6 @@ function converge!(g::FactorGraph; maxiters::Int=10000, ϵ::Float64=1e-5
             break
         end
     end
-    println(ThermFunc(g))
-    println(OrderParams(g))
 end
 
 function energy(g::FactorGraph, W::Vector)
@@ -460,7 +475,12 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
         converge!(g, maxiters=maxiters, ϵ=ϵ, reinf=reinf
             , altsolv=altsolv, altconv=altconv)
 
+        tf = ThermFunc(g)
+        op = OrderParams(g)
+        println("$tf")
+        println("$op")
         update_reinforcement!(reinf) || break
+        tf.Σint < 0 && break
     end
     return mags(g), magst(g)
 end
