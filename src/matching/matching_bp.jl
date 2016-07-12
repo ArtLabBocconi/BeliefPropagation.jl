@@ -45,7 +45,7 @@ type FactorGraph
     fnodes::Vector{Fact}
     vnodes::Vector{Var}
 
-    function FactorGraph(N::Int, d::Int, γ::Float64; β=Inf)
+    function FactorGraph(N::Int, d::Int, γ::Float64; β=Inf, ismonopartite=false)
         nf = N*d
         nv = round(Int, N * 2γ)
         # nv = N^d
@@ -60,7 +60,11 @@ type FactorGraph
             # idx = ind2sub(dims, i)
             for l=1:d
                 # a = N*(l-1) + idx[l]
-                a = N*(l-1) + rand(1:N)
+                if ismonopartite
+                    a = rand(1:(d*N))
+                else
+                    a = N*(l-1) + rand(1:N)
+                end
                 f = fnodes[a]
                 push!(f.neigs, i)
                 push!(v.neigs, a)
@@ -206,26 +210,36 @@ end
 function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5
         , reinfpar::ReinfParams=ReinfParams())
 
+    Eold = 0.
+    tstop = 0
     for it=1:maxiters
         print("it=$it ... ")
         Δ = oneBPiter!(g, reinfpar.r)
-        E, matchmap = energy(g)
-        @printf("r=%.3f E=%.3f   \tΔ=%f \n", reinfpar.r, E, Δ)
+        E, matchmap, nfails = energy(g)
+        @printf("r=%.3f E=%.5f  nfails=%d \tΔ=%f \n", reinfpar.r, E, nfails, Δ)
         update_reinforcement!(reinfpar)
 
-        if Δ < ϵ
-            println("Converged!")
-            break
+        if abs(Eold-E) < ϵ && nfails == 0
+            tstop += 1
+            if tstop == 10
+                println("Found ground state")
+                break
+            end
+        else
+            tstop = 0
         end
+
+        Eold = E
     end
 end
 
-function energy(g::FactorGraph; checkvalidity = false)
+function energy(g::FactorGraph)
+    #TODO estendere al multi-index
     @extract g: fnodes vnodes N
     E = 0.
-    matchmap = zeros(Int, N) #only for d=2
-    matchcount = zeros(Int, N)
-    for a=1:N
+    matchmap = zeros(Int, 2N) #only for d=2
+    matchcount = zeros(Int, 2N)
+    for a=1:2N
         f = fnodes[a]
         i1 = 0
         m1 = 10000.
@@ -238,16 +252,16 @@ function energy(g::FactorGraph; checkvalidity = false)
         @assert i1 > 0
         v = vnodes[f.neigs[i1]]
         E += v.E
-        matchmap[a] = v.neigs[2] - N
-        matchcount[v.neigs[2] - N] += 1
+        neig = a == v.neigs[1] ? v.neigs[2] : v.neigs[1]
+        matchmap[a] = neig
+        matchcount[neig] += 1
     end
-    if checkvalidity
-        for i=1:N
-            @assert matchcount[i] == 1
-        end
+    nfails = 0
+    for i=1:2N
+        nfails += matchcount[i] == 1 ? 0 : 1
     end
     # println("nv=$(nv/N) E=$(E/N)")
-    return E / N, matchmap
+    return E / (2N), matchmap, nfails
 end
 
 """
@@ -255,16 +269,18 @@ Return the optimal cost density and the matching map:
 `matchmap[i] = j`  if (i,j) is in the optimal matching.
 
 The cutoff on the costs is  2γ.
+
+BP on the multi-index matching diverges witouth giving meaningful results
 """
 function solve(;N=200, d=2, γ=40.,
                 maxiters::Int = 10000, ϵ::Float64 = 1e-4,
                 r::Float64 = 0., rstep::Float64= 0.00,
-                seed::Int = -1)
+                seed::Int = -1, ismonopartite=false)
     seed > 0 && srand(seed)
-    g = FactorGraph(N, d, γ)
+    g = FactorGraph(N, d, γ, ismonopartite=ismonopartite)
     initrand!(g)
     reinfpar = ReinfParams(r, rstep)
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar)
-    E, matchmap = energy(g, checkvalidity = true)
+    E, matchmap, nfails = energy(g)
     return E, matchmap
 end
