@@ -346,6 +346,28 @@ function initYBottom!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::F
     end
 end
 
+
+
+function randupdate!{L <: Union{BPLayer, BPExactLayer}}(layer::L, r::Float64, ry::Float64)
+    @extract layer K N M allm allmy allmh allpu allpd allhy
+    @extract layer bottom_allpu top_allpd
+    @extract layer allmcav allmycav allmhcavtow allmhcavtoy
+
+
+    updateFact!(layer, rand(1:K))
+    # println("mhcavw=$(allmhcavtow[1][1])")
+    Δ = 0.
+    if !istoplayer(layer) || isonlylayer(layer)
+        # println("Updating W")
+        δ = updateVarW!(layer, rand(1:K), r)
+        Δ = max(δ, Δ)
+    end
+    if !isbottomlayer(layer)
+        updateVarY!(layer, rand(1:M), ry)
+    end
+    return Δ
+end
+
 function update!{L <: Union{BPLayer, BPExactLayer}}(layer::L, r::Float64, ry::Float64)
     @extract layer K N M allm allmy allmh allpu allpd allhy
     @extract layer bottom_allpu top_allpd

@@ -125,6 +125,26 @@ function update!(g::FactorGraph, r::Float64, ry::Float64)
     end
     return Δ
 end
+function randupdate!(g::FactorGraph, r::Float64, ry::Float64)
+    @extract g: K
+    Δ = 0.# Updating layer $(lay.l)")
+    numW = sum(l->K[l]*K[l+1],1:length(K)-2)
+    numW = sum(l->K[l],1:length(K)-2)
+    for it=1:numW
+        for l=2:g.L+1
+            dropout!(g, l+1)
+            # rl = l > 2 ? r/l : r
+            # ryl = l*ry
+            rl = r
+            ryl = ry
+            δ = randupdate!(g.layers[l], rl, ryl)
+            Δ = max(δ, Δ)
+        end
+    end
+    return Δ
+end
+
+
 
 getW(g::FactorGraph) = [getW(lay) for lay in g.layers[2:end-1]]
 
@@ -223,7 +243,9 @@ function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
                                 , reinfpar::ReinfParams=ReinfParams())
 
     for it=1:maxiters
+        # Δ = randupdate!(g, reinfpar.r, reinfpar.ry)
         Δ = update!(g, reinfpar.r, reinfpar.ry)
+
         E, h = energy(g)
         @printf("it=%d \t r=%.3f ry=%.3f \t E=%d \t Δ=%f \n"
                 , it, reinfpar.r, reinfpar.ry, E, Δ)
