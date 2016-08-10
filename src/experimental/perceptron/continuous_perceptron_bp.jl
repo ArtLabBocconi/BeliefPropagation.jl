@@ -1,4 +1,4 @@
-using MacroUtils
+using ExtractMacro
 
 typealias Mess Float64
 typealias P Ptr{Mess}

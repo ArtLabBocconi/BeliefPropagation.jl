@@ -1,5 +1,5 @@
 module PF
-using MacroUtils
+using ExtractMacro
 using FastGaussQuadrature
 using JLD
 

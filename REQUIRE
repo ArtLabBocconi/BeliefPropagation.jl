@@ -1,6 +1,4 @@
-julia 0.4
 LightGraphs
 FastGaussQuadrature
-MacroUtils
-Iterators
+ExtractMacro
 HDF5

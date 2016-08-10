@@ -1,6 +1,6 @@
 module DeepBinary
 using HDF5
-using MacroUtils
+using ExtractMacro
 using FastGaussQuadrature
 using PyPlot
 include("../utils/OO.jl")

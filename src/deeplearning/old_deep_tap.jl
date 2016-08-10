@@ -1,7 +1,7 @@
 module Deep
 include("../utils/OO.jl")
 import OO.@oo
-using MacroUtils
+using ExtractMacro
 using FastGaussQuadrature
 using PyPlot
 

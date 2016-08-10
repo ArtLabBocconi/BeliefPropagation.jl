@@ -1,4 +1,4 @@
-using MacroUtils
+using ExtractMacro
 typealias MessU Float64  # ̂ν(a→i) = P(σ_i != J_ai)
 typealias MessH Float64 #  ν(i→a) = P(σ_i != J_ai)
 

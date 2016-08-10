@@ -4,7 +4,7 @@ include("../../utils/MagnetizationsT.jl")
 using .MagnetizationsT
 include("../../utils/functions.jl")
 
-using MacroUtils
+using ExtractMacro
 import Base: *,/
 typealias Mess Mag64
 typealias P Ptr{Mess}

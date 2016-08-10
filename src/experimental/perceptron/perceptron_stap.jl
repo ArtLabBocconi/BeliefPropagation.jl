@@ -1,4 +1,4 @@
-using MacroUtils
+using ExtractMacro
 using FastGaussQuadrature
 
 G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
