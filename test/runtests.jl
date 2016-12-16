@@ -7,10 +7,10 @@ println("@ Testing Functions...")
 include("functions.jl")
 println("@ ... done.")
 
-println("@ Testing DeepLearning...")
-include("deeplearning.jl")
-println("@ ... done.")
-
+# println("@ Testing DeepLearning...")
+# include("deeplearning.jl")
+# println("@ ... done.")
+#
 println("@ Testing KSAT...")
 include("ksat.jl")
 println("@ ... done.")

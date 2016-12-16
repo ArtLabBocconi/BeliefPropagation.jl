@@ -1,5 +1,3 @@
-include("ising_mc.jl")
-
 function make_new_learning_weights!(g::FactorGraphIsing, H::Vector, maxiters_learning, η, λ)
     for it=1:maxiters_learning
         setH!(g, λ*H)

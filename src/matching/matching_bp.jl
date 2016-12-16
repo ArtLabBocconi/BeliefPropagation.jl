@@ -3,8 +3,6 @@ typealias MessU Float64  # ̂ν(a→i) = P(σ_i != J_ai)
 typealias MessH Float64 #  ν(i→a) = P(σ_i != J_ai)
 
 getref(v::Vector, i::Integer) = pointer(v, i)
-MessU(x=0.) = x
-MessH(x=0.) = x
 
 typealias PU Ptr{MessU}
 typealias PH Ptr{MessH}
@@ -30,7 +28,7 @@ type Var
     neigs::Vector{Int}
 end
 
-Var() = Var(0., VU(), VRH(), MessH(), Int[])
+Var() = Var(0., VU(), VRH(), MessH(0), Int[])
 
 
 """
@@ -90,10 +88,10 @@ type FactorGraph
                 a = v.neigs[l]
                 # a = N*(l-1) + idx[l]
                 f = fnodes[a]
-                push!(v.u, MessU())
+                push!(v.u, MessU(0))
                 push!(f.u, getref(v.u, length(v.u)))
 
-                push!(f.h, MessH())
+                push!(f.h, MessH(0))
                 push!(v.h, getref(f.h, length(f.h)))
             end
         end

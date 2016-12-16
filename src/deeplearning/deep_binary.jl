@@ -40,27 +40,27 @@ type FactorGraph
         for l=1:L
             if      layertype[l] == :tap
                 push!(layers, TapLayer(K[l+1], K[l], M))
-                println("Created TapLayer")
+                println("Created TapLayer\t $(K[l])")
             elseif  layertype[l] == :tapex
                 push!(layers, TapExactLayer(K[l+1], K[l], M))
-                println("Created TapExactLayer")
+                println("Created TapExactLayer\t $(K[l])")
             elseif  layertype[l] == :bp
                 push!(layers, BPLayer(K[l+1], K[l], M))
-                println("Created BPLayer")
+                println("Created BPLayer\t $(K[l])")
             elseif  layertype[l] == :bpex
                 push!(layers, BPExactLayer(K[l+1], K[l], M))
-                println("Created BPExactLayer")
+                println("Created BPExactLayer\t $(K[l])")
             elseif  layertype[l] == :ms
                 push!(layers, MaxSumLayer(K[l+1], K[l], M, βms=βms, rms=rms))
-                println("Created MaxSumLayer")
+                println("Created MaxSumLayer\t $(K[l])")
             elseif  layertype[l] == :parity
                 @assert l == L
                 push!(layers, ParityLayer(K[l+1], K[l], M))
-                println("Created ParityLayer")
+                println("Created ParityLayer\t $(K[l])")
             elseif  layertype[l] == :bpreal
                 @assert l == 1
                 push!(layers, BPRealLayer(K[l+1], K[l], M))
-                println("Created BPRealLayer")
+                println("Created BPRealLayer\t $(K[l])")
             else
                 error("Wrong Layer Symbol")
             end

@@ -3,8 +3,6 @@ include("cnf.jl")
 typealias MessU Float64  # ̂ν(a→i) = P(σ_i != J_ai)
 typealias MessH Float64 #  ν(i→a) = P(σ_i != J_ai)
 getref(v::Vector, i::Integer) = pointer(v, i)
-MessU(x=0.) = x
-MessH(x=0.) = x
 
 typealias PU Ptr{MessU}
 typealias PH Ptr{MessH}
@@ -80,16 +78,16 @@ type FactorGraphKSAT <: FactorGraph
                 f = fnodes[a]
                 v = vnodes[i]
                 if id > 0
-                    push!(v.ηlistm, MessU())
+                    push!(v.ηlistm, MessU(0))
                     push!(f.ηlist, getref(v.ηlistm,length(v.ηlistm)))
 
-                    push!(f.πlist, MessH())
+                    push!(f.πlist, MessH(0))
                     push!(v.πlistm, getref(f.πlist,length(f.πlist)))
                 else
-                    push!(v.ηlistp, MessU())
+                    push!(v.ηlistp, MessU(0))
                     push!(f.ηlist, getref(v.ηlistp,length(v.ηlistp)))
 
-                    push!(f.πlist, MessH())
+                    push!(f.πlist, MessH(0))
                     push!(v.πlistp, getref(f.πlist,length(f.πlist)))
                 end
             end
