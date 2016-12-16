@@ -159,7 +159,7 @@ function printvec(q::Vector{Float64}, head = "")
     end
     println()
 end
-function plot_info(g::FactorGraph, info=1)
+function plot_info(g::FactorGraph, info=1; verbose=0)
     W = getW(g)
     K = g.K
     L = length(K)-1
@@ -179,8 +179,8 @@ function plot_info(g::FactorGraph, info=1)
                 push!(qWαβ, dot(layers[l].allm[k],layers[l].allm[p]) / sqrt(q0[k]*q0[p])/K[l])
             end
         end
-        printvec(q0,"layer $l q0=")
-        printvec(qWαβ,"layer $l qWαβ=")
+        verbose > 0 && printvec(q0,"layer $l q0=")
+        verbose > 0 && printvec(qWαβ,"layer $l qWαβ=")
 
         info == 0 && continue
 
@@ -240,17 +240,18 @@ end
 
 function converge!(g::FactorGraph; maxiters::Int = 10000, ϵ::Float64=1e-5
                                 , altsolv::Bool=false, altconv = false, plotinfo=-1
-                                , reinfpar::ReinfParams=ReinfParams())
+                                , reinfpar::ReinfParams=ReinfParams()
+                                , verbose::Int=1)
 
     for it=1:maxiters
         # Δ = randupdate!(g, reinfpar.r, reinfpar.ry)
         Δ = update!(g, reinfpar.r, reinfpar.ry)
 
         E, h = energy(g)
-        @printf("it=%d \t r=%.3f ry=%.3f \t E=%d \t Δ=%f \n"
+        verbose > 0 && @printf("it=%d \t r=%.3f ry=%.3f \t E=%d \t Δ=%f \n"
                 , it, reinfpar.r, reinfpar.ry, E, Δ)
         # println(h)
-        plotinfo >=0  && plot_info(g, plotinfo)
+        plotinfo >=0  && plot_info(g, plotinfo, verbose=verbose)
         update_reinforcement!(reinfpar)
         if altsolv && E == 0
             println("Found Solution: correctly classified $(g.M) patterns.")
@@ -410,7 +411,8 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 ry::Float64 = 0., rystep::Float64= 0.0,
                 altsolv::Bool = true, altconv::Bool = false,
                 seed::Int = -1, plotinfo=0,
-                β=Inf, βms = 1., rms = 1., ndrops = 0, maketree=false)
+                β=Inf, βms = 1., rms = 1., ndrops = 0, maketree=false,
+                verbose::Int = 1)
 
     seed > 0 && srand(seed)
     g = FactorGraph(ξ, σ, K, layers, β=β, βms=βms, rms=rms, ndrops=ndrops)
@@ -420,7 +422,8 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
     reinfpar = ReinfParams(r, rstep, ry, rystep)
 
     converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar,
-            altsolv=altsolv, altconv=altconv, plotinfo=plotinfo)
+            altsolv=altsolv, altconv=altconv, plotinfo=plotinfo,
+            verbose=verbose)
 
     E, stab = energy(g)
     return g, getW(g), E, stab
