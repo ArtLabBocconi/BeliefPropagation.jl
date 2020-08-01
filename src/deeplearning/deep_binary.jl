@@ -1,24 +1,26 @@
 module DeepBinary
-using HDF5
+
 using ExtractMacro
 using FastGaussQuadrature
-using PyPlot
-include("../utils/OO.jl")
-import OO.@oo
+using SpecialFunctions
+using Printf
+using Random
+using LinearAlgebra
+using Statistics
 
-typealias CVec Vector{Complex128}
-typealias IVec Vector{Int}
-typealias Vec Vector{Float64}
-typealias VecVec Vector{Vec}
-typealias IVecVec Vector{IVec}
-typealias VecVecVec Vector{VecVec}
-typealias IVecVecVec Vector{IVecVec}
+const CVec = Vector{Complex{Float64}}
+const IVec = Vector{Int}
+const Vec = Vector{Float64}
+const VecVec = Vector{Vec}
+const IVecVec = Vector{IVec}
+const VecVecVec = Vector{VecVec}
+const IVecVecVec = Vector{IVecVec}
 
 include("../utils/functions.jl")
 include("layers.jl")
 include("dropout.jl")
 
-type FactorGraph
+mutable struct FactorGraph
     K::Vector{Int} # dimension of hidden layers
     M::Int
     L::Int         # number of hidden layers. L=length(layers)-2
@@ -79,7 +81,7 @@ type FactorGraph
     end
 end
 
-type ReinfParams
+mutable struct ReinfParams
     r::Float64
     rstep::Float64
     ry::Float64
@@ -113,7 +115,7 @@ function fixtopbottom!(g::FactorGraph)
 end
 
 function update!(g::FactorGraph, r::Float64, ry::Float64)
-    Δ = 0.# Updating layer $(lay.l)")
+    Δ = 0. # Updating layer $(lay.l)")
     for l=2:g.L+1
         dropout!(g, l+1)
         # rl = l > 2 ? r/l : r
@@ -125,6 +127,7 @@ function update!(g::FactorGraph, r::Float64, ry::Float64)
     end
     return Δ
 end
+
 function randupdate!(g::FactorGraph, r::Float64, ry::Float64)
     @extract g: K
     Δ = 0.# Updating layer $(lay.l)")
@@ -159,6 +162,7 @@ function printvec(q::Vector{Float64}, head = "")
     end
     println()
 end
+
 function plot_info(g::FactorGraph, info=1; verbose=0)
     W = getW(g)
     K = g.K
@@ -310,7 +314,7 @@ function randTeacher(K::Vector{Int})
         end
     end
     if L > 1
-        W[L][1][:] = 1
+        W[L][1] .= 1
     end
     return W
 end
@@ -318,7 +322,7 @@ end
 function solveTS(; K::Vector{Int} = [101,3], α::Float64=0.6
             , seedξ::Int=-1
             , kw...)
-    seedξ > 0 && srand(seedξ)
+    seedξ > 0 && Random.seed!(seedξ)
     numW = length(K)==2 ? K[1]*K[2]  : sum(l->K[l]*K[l+1],1:length(K)-2)
     N = K[1]
     ξ = zeros(K[1], 1)
@@ -343,7 +347,7 @@ function solve(; K::Vector{Int} = [101,3], α::Float64=0.6
             , dξ::Vector{Float64} = Float64[], nξ::Vector{Int} = Int[]
             , maketree = false, kw...)
 
-    seedξ > 0 && srand(seedξ)
+    seedξ > 0 && Random.seed!(seedξ)
     numW = length(K)==2 ? K[1]*K[2]  : sum(l->K[l]*K[l+1],1:length(K)-2)
     maketree && (numW = div(numW, K[2]))
     N = K[1]
@@ -414,7 +418,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 β=Inf, βms = 1., rms = 1., ndrops = 0, maketree=false,
                 verbose::Int = 1)
 
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
     g = FactorGraph(ξ, σ, K, layers, β=β, βms=βms, rms=rms, ndrops=ndrops)
     initrand!(g)
     fixtopbottom!(g)

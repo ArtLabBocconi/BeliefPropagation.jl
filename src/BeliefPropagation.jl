@@ -1,14 +1,12 @@
 module BeliefPropagation
-import Base.show
+
 export KSATBP, Ising
-export PerceptronEdTAP
+# export PerceptronEdTAP
 export DeepBinary
 export Matching
 
 Base.getindex(p::Ptr) = unsafe_load(p)
-Base.setindex!{T}(p::Ptr{T}, x::T) = unsafe_store!(p, x)
-Base.show(io::IO, p::Ptr) = show(io, p[])
-Base.show(p::Ptr) = show(p[])
+Base.setindex!(p::Ptr{T}, x::T) where T = unsafe_store!(p, x)
 
 module KSATBP
     include("ksat/ksat_bp.jl")

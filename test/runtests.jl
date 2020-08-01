@@ -1,25 +1,23 @@
-include("../src/BeliefPropagation.jl")
 using BeliefPropagation
-using Base.Test
+using Test
 
-println("@ START TESTING")
-println("@ Testing Functions...")
-include("functions.jl")
-println("@ ... done.")
+@testset "BeliefPropagation.jl" begin 
+    @testset "Functions" begin
+        include("functions.jl")
+    end
 
-# println("@ Testing DeepLearning...")
-# include("deeplearning.jl")
-# println("@ ... done.")
-#
-println("@ Testing KSAT...")
-include("ksat.jl")
-println("@ ... done.")
+    @testset "DeepMP" begin
+        include("deeplearning.jl")
+    end
 
-println("@ Testing Matching...")
-include("matching.jl")
-println("@ ... done.")
+    @testset "KSAT" begin
+        include("ksat.jl")
+    end
 
-println("@ ALL TESTS PASSED!")
+    @testset "Matching" begin
+        include("matching.jl")
+    end
+end
 
 # @time g, W, E, stab = DeepBinary.solve(α=0.15, K=[301,21,11,3,1]
 #                    , layers=[:tap,:tap,:tapex,:bpex]

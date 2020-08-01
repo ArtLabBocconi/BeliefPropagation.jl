@@ -3,7 +3,7 @@
 #   Parity
 ##############################################################
 
-type ParityLayer <: AbstractLayer
+mutable struct ParityLayer <: AbstractLayer
     l::Int
     K::Int
     N::Int
@@ -157,19 +157,19 @@ function initrand!(layer::ParityLayer)
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
     for m in allm
-        m[:] = 2*rand(N) - 1
+        m .= 2*rand(N) .- 1
     end
     for my in allmy
-        my[:] = 2*rand(N) - 1
+        my .= 2*rand(N) .- 1
     end
     for mh in allmh
-        mh[:] = 2*rand(M) - 1
+        mh .= 2*rand(M) .- 1
     end
     for pu in allpu
-        pu[:] = rand(M)
+        pu .= rand(M)
     end
     for pd in allpd
-        pd[:] = rand(M)
+        pd .= rand(M)
     end
 
     # if!isbottomlayer

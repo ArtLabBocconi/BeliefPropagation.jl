@@ -1,5 +1,5 @@
 # NOTE le m in realtà sono tutte dei campi
-type MaxSumIntLayer <: AbstractLayer
+mutable struct MaxSumIntLayer <: AbstractLayer
     l::Int
     K::Int
     N::Int
@@ -132,9 +132,9 @@ function updateFact!(layer::MaxSumIntLayer, k::Int)
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
-    mh = allmh[k];
-    pdtop = top_allpd[k];
-    pubot = bottom_allpu;
+    mh = allmh[k]
+    pdtop = top_allpd[k]
+    pubot = bottom_allpu
     ϕ = zeros(Int, N)
     iinfo=1; ainfo = -3
     for a=1:M
@@ -151,7 +151,7 @@ function updateFact!(layer::MaxSumIntLayer, k::Int)
         end
 
         π = sortperm(ϕ)
-        ϕ[:] = ϕ[π]
+        ϕ .= ϕ[π]
         km = searchsortedlast(ϕ,-1.)+1
         # km = searchsortedfirst(ϕ,-1.)
         k0m = searchsortedfirst(ϕ,0.)
@@ -331,7 +331,7 @@ function update!{L <: Union{MaxSumIntLayer}}(layer::L, r::Float64, ry::Float64)
     return Δ
 end
 
-function Base.show{L <: Union{MaxSumIntLayer}}(io::IO, layer::L)
+function Base.show(io::IO, layer::MaxSumIntLayer)
     for f in fieldnames(layer)
         println(io, "$f=$(getfield(layer,f))")
     end
@@ -343,16 +343,16 @@ function initrand!{L <: Union{MaxSumIntLayer}}(layer::L)
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
     for m in allm
-        m[:] = rand([-1,1],N)
+        m .= rand([-1,1], N)
     end
     for my in allmy
-        my[:] = rand([-1,1],N)
+        my .= rand([-1,1], N)
     end
     for mh in allmh
-        mh[:] = rand([-1,1],M)
+        mh .= rand([-1,1], M)
     end
     for pu in allpu
-        pu[:] = rand([-1,1],M)
+        pu .= rand([-1,1], M)
     end
 
     for k=1:K,a=1:M,i=1:N

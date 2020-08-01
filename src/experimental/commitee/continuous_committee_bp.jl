@@ -18,7 +18,7 @@ Base.show(p::Ptr) = show(p[])
 Base.Ptr{T}() = convert(T, C_NULL)
 Mess() = Mess(0.)
 
-G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
+G(x) = exp(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
 E(x) = erf(x / √convert(typeof(x),2))
 #GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
@@ -29,7 +29,7 @@ function GHapp(x)
 end
 GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
 
-type Fact
+mutable struct Fact
     ## INCOMING
     m::VMess # from W ↑
     ρ::VMess # from W ↑
@@ -45,7 +45,7 @@ type Fact
 end
 Fact(ξ) = Fact(VMess(), VMess(),VMess(),VPMess(), VPMess(),VPMess(), VPMess(), ξ)
 
-type TopFact
+mutable struct TopFact
     ## INCOMING
     mb::VMess  # from Fact ↑
     ρb::VMess  # from Fact ↑
@@ -57,7 +57,7 @@ type TopFact
 end
 TopFact(σ) = TopFact(VMess(),VMess(),VPMess(), σ)
 
-type Var
+mutable struct Var
     ## INCOMING
     mh::VMess # from Fact ↓
     ρh::VMess # from Fact ↓
@@ -74,7 +74,7 @@ end
 Var(λ=1.) = Var(VMess(), VMess(),
                     VPMess(), VPMess(), 0.,0., λ)
 
-type VarY
+mutable struct VarY
     ## INCOMING
     mht::VMess # from Fact ↓
     mhb::VMess # from Fact ↑
@@ -94,7 +94,7 @@ end
 VarY(λ=1.) = VarY(VMess(), VMess(), VMess(),
                     VPMess(), VPMess(), VPMess(), 0.,0., λ)
 
-type FactorGraph
+mutable struct FactorGraph
     N::Int
     M::Int
     K::Int
@@ -215,7 +215,7 @@ type FactorGraph
     end
 end
 
-type ReinfParams
+mutable struct ReinfParams
     r::Float64
     r_step::Float64
     γ::Float64
@@ -234,36 +234,36 @@ function initrand!(g::FactorGraph)
     ϵ =1e-3
     for a=1:M,k=1:K
         f=fnodes[a][k]
-        f.m[:] = (2*rand(deg(f)) - 1)
-        # f.m[:] = ϵ
-        # f.ρ[:] = f.m.^2 + 1e-3
-        f.ρ[:] = 1.
-        # f.mt[:] = ϵ*rand(1)
-        f.mt[:] = 1e-5
+        f.m .= (2*rand(deg(f)) .- 1)
+        # f.m .= ϵ
+        # f.ρ .= f.m.^2 .+ 1e-3
+        f.ρ  .= 1.
+        # f.mt .= ϵ*rand(1)
+        f.mt .= 1e-5
 
-        v=ynodes[a][k]
-        v.mhb[:]= 2rand()-1
-        v.ρhb[:]= 1
-        v.mht[:]= 2rand()-1
-        v.h1 = 2rand()-1
-        v.h2 = 2rand()-1
+        v = ynodes[a][k]
+        v.mhb .= 2rand() .- 1
+        v.ρhb .= 1
+        v.mht .= 2rand() .- 1
+        v.h1 = 2rand() - 1
+        v.h2 = 2rand() - 1
     end
 
     for k=1:K
         for v in vnodes[k]
-            v.mh[:] = ϵ*(2*rand(deg(v)) - 1)
-            # v.mh[:] = ϵ
-            v.ρh[:] = 1e-3
-            v.h1 = 2rand()-1
-            v.h2 = 2rand()-1
+            v.mh .= ϵ*(2*rand(deg(v)) .- 1)
+            # v.mh .= ϵ
+            v.ρh  .= 1e-3
+            v.h1 = 2rand() - 1
+            v.h2 = 2rand() - 1
         end
     end
 
     for f in topfnodes
-        # f.mb[:] = ϵ*(2*rand(deg(f)) - 1)/2
-        f.mb[:] = 1-ϵ
-        # f.ρb[:] = f.mb.^2 + 1e-3
-        f.ρb[:] = 1.
+        # f.mb .= ϵ*(2*rand(deg(f)) .- 1)/2
+        f.mb .= 1-ϵ
+        # f.ρb .= f.mb.^2 .+ 1e-3
+        f.ρb .= 1.
     end
 end
 
@@ -502,7 +502,7 @@ energyClipped(g::FactorGraph) = energy(g, getWClipped(g))
 
 
 function solve(; N::Int=1000, α::Float64=0.6, K::Int=3, seed_ξ::Int=-1, kw...)
-    seed_ξ > 0 && srand(seed_ξ)
+    seed_ξ > 0 && Random.seed!(seed_ξ)
 
     M = round(Int, α * K*N)
     M = round(Int, α *N)
@@ -521,7 +521,7 @@ function solve(ξ::Matrix, σ::Vector{Int};
                 weight=:continuous, #:continuous, :binary
                 activation=:erf #:erf, :sign
                 )
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
 
     g = FactorGraph(ξ, σ, K, λ=λ, activation=activation, weight=weight)
     initrand!(g)

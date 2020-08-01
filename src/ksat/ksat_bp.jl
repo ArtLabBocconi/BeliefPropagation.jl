@@ -1,24 +1,28 @@
 using ExtractMacro
+using Printf
+using Random
+
 include("cnf.jl")
-typealias MessU Float64  # ̂ν(a→i) = P(σ_i != J_ai)
-typealias MessH Float64 #  ν(i→a) = P(σ_i != J_ai)
+
+const MessU = Float64  # ̂ν(a→i) = P(σ_i != J_ai)
+const MessH = Float64 #  ν(i→a) = P(σ_i != J_ai)
 getref(v::Vector, i::Integer) = pointer(v, i)
 
-typealias PU Ptr{MessU}
-typealias PH Ptr{MessH}
+const PU = Ptr{MessU}
+const PH = Ptr{MessH}
 
-typealias VU Vector{MessU}
-typealias VH Vector{MessH}
-typealias VRU Vector{PU}
-typealias VRH Vector{PH}
+const VU = Vector{MessU}
+const VH = Vector{MessH}
+const VRU = Vector{PU}
+const VRH = Vector{PH}
 
-type Fact
+mutable struct Fact
     πlist::Vector{MessH}
     ηlist::VRU
 end
 Fact() = Fact(VH(), VRU())
 
-type Var
+mutable struct Var
     pinned::Int
     ηlistp::Vector{MessU}
     ηlistm::Vector{MessU}
@@ -32,8 +36,8 @@ end
 
 Var() = Var(0, VU(),VU(), VRH(), VRH(), 1., 1.)
 
-abstract FactorGraph
-type FactorGraphKSAT <: FactorGraph
+abstract type FactorGraph end
+mutable struct FactorGraphKSAT <: FactorGraph
     N::Int
     M::Int
     fnodes::Vector{Fact}
@@ -74,7 +78,7 @@ type FactorGraphKSAT <: FactorGraph
         for (a, clause) in enumerate(clauses)
             for id in clause
                 i = abs(id)
-                assert(id != 0)
+                @assert(id != 0)
                 f = fnodes[a]
                 v = vnodes[i]
                 if id > 0
@@ -96,7 +100,7 @@ type FactorGraphKSAT <: FactorGraph
     end
 end
 
-type ReinfParams
+mutable struct ReinfParams
     r::Float64
     rstep::Float64
     γ::Float64
@@ -387,7 +391,7 @@ function solve(cnfname::AbstractString; kw...)
 end
 
 function solve(; N::Int=1000, α::Float64=3., k::Int = 4, seed_cnf::Int=-1, kw...)
-    seed_cnf > 0 && srand(seed_cnf)
+    seed_cnf > 0 && Random.seed!(seed_cnf)
     cnf = CNF(N, k, α)
     solve(cnf; kw...)
 end
@@ -398,7 +402,7 @@ function solve(cnf::CNF; maxiters::Int = 10000, ϵ::Float64 = 1e-4,
                 γ::Float64 = 0., γstep::Float64=0.,
                 alt_when_solved::Bool = true,
                 seed::Int = -1)
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
     g = FactorGraphKSAT(cnf)
     initrand!(g)
     E = -1

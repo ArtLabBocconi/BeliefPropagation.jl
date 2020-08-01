@@ -1,7 +1,7 @@
 using ExtractMacro
 using FastGaussQuadrature
 
-G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
+G(x) = exp(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
 #GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
 function GHapp(x)
@@ -42,7 +42,7 @@ end
 #     end, interval..., abstol=1e-14,  maxevals=10^10)[1]
 ######################
 
-type FactorGraphTAP
+mutable struct FactorGraphTAP
     N::Int
     M::Int
     ξ::Matrix{Int}
@@ -67,7 +67,7 @@ type FactorGraphTAP
     end
 end
 
-type ReinfParams
+mutable struct ReinfParams
     r::Float64
     r_step::Float64
     γ::Float64
@@ -206,7 +206,7 @@ function converge!(g::FactorGraphTAP; maxiters::Int = 10000, ϵ::Float64=1e-5
 end
 
 ### Thermodinamic Functions ##########
-type OrderParams
+mutable struct OrderParams
     Ψ::Float64
     Σext::Float64
     Σint::Float64
@@ -292,7 +292,7 @@ mags(g::FactorGraphTAP) = g.m
 
 function solve(; N::Int=1000, α = 0.6, seed_ξ = -1, kw...)
     if seed_ξ > 0
-        srand(seed_ξ)
+        Random.seed!(seed_ξ)
     end
     M = round(Int, α * N)
     ξt = Vector{Int}[rand(-1.0:2.0:1.0, N) for a = 1:M]
@@ -313,7 +313,7 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters = 10000, ϵ = 1e-4,
     global nint = n
     global dex = dx
 
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
     g = FactorGraphTAP(ξ, σ, γ, y)
     initrand!(g)
 

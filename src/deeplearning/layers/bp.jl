@@ -1,7 +1,7 @@
 #TODO Layer not working
 
 
-type BPExactLayer <: AbstractLayer
+mutable struct BPExactLayer <: AbstractLayer
     l::Int
     K::Int
     N::Int
@@ -89,7 +89,7 @@ function updateFact!(layer::BPExactLayer, k::Int)
         mhw = allmhcavtow[k]
         mhy = allmhcavtoy[a]
 
-        X = ones(Complex128, N+1)
+        X = ones(Complex{Float64}, N+1)
         for p=1:N+1
             for i=1:N
                 pup = (1+mcav[i]*mycav[i])/2
@@ -99,8 +99,8 @@ function updateFact!(layer::BPExactLayer, k::Int)
 
         vH = tanh(pdtop[a])
         if !istoplayer(layer)
-            s2P = Complex128(0.)
-            s2M = Complex128(0.)
+            s2P = Complex{Float64}(0.)
+            s2M = Complex{Float64}(0.)
             for p=1:N+1
                 s2P += expinv2P[p] * X[p]
                 s2M += expinv2M[p] * X[p]
@@ -113,9 +113,9 @@ function updateFact!(layer::BPExactLayer, k::Int)
 
         for i = 1:N
             pup = (1+mcav[i]*mycav[i])/2
-            s0 = Complex128(0.)
-            s2p = Complex128(0.)
-            s2m = Complex128(0.)
+            s0 = Complex{Float64}(0.)
+            s2p = Complex{Float64}(0.)
+            s2m = Complex{Float64}(0.)
             for p=1:N+1
                 xp = X[p] / (1-pup + pup*expf[p])
                 s0 += expinv0[p] * xp
@@ -124,8 +124,8 @@ function updateFact!(layer::BPExactLayer, k::Int)
             end
             pp = (1+vH)/2; pm = 1-pp
             sr = vH * real(s0 / (pp*(s0 + 2s2p) + pm*(s0 + 2s2m)))
-            sr > 1 && (sr=1.-1e-10) #print("!")
-            sr < -1 && (sr=-1.+1e-10) #print("!")
+            sr > 1 && (sr=1 - 1e-10) #print("!")
+            sr < -1 && (sr=-1 + 1e-10) #print("!")
             if !istoplayer(layer) || isonlylayer(layer)
                 mhw[i][a] =  myatanh(mycav[i] * sr)
                 !isfinite(mhw[i][a]) && (mhw[i][a] = sign(mhw[i][a])*20) #print("!")
@@ -147,7 +147,7 @@ end
 #   BPLayer
 ##############################################################
 
-type BPLayer <: AbstractLayer
+mutable struct BPLayer <: AbstractLayer
     l::Int
     K::Int
     N::Int
@@ -270,7 +270,7 @@ function updateFact!(layer::BPLayer, k::Int)
     end
 end
 
-function updateVarW!{L <: Union{BPLayer, BPExactLayer}}(layer::L, k::Int, r::Float64=0.)
+function updateVarW!(layer::L, k::Int, r::Float64=0.) where {L <: Union{BPLayer, BPExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd allh
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
@@ -292,7 +292,7 @@ function updateVarW!{L <: Union{BPLayer, BPExactLayer}}(layer::L, k::Int, r::Flo
     return Δ
 end
 
-function updateVarY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::Float64=0.)
+function updateVarY!(layer::L, a::Int, ry::Float64=0.) where {L <: Union{BPLayer, BPExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd allhy
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
@@ -328,7 +328,7 @@ function updateVarY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::Fl
     end
 end
 
-function initYBottom!{L <: Union{BPLayer, BPExactLayer}}(layer::L, a::Int, ry::Float64=0.)
+function initYBottom!(layer::L, a::Int, ry::Float64=0.) where {L <: Union{BPLayer, BPExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd allhy
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
@@ -348,7 +348,7 @@ end
 
 
 
-function randupdate!{L <: Union{BPLayer, BPExactLayer}}(layer::L, r::Float64, ry::Float64)
+function randupdate!(layer::L, r::Float64, ry::Float64) where {L <: Union{BPLayer, BPExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd allhy
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
@@ -368,7 +368,7 @@ function randupdate!{L <: Union{BPLayer, BPExactLayer}}(layer::L, r::Float64, ry
     return Δ
 end
 
-function update!{L <: Union{BPLayer, BPExactLayer}}(layer::L, r::Float64, ry::Float64)
+function update!(layer::L, r::Float64, ry::Float64) where {L <: Union{BPLayer, BPExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd allhy
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
@@ -396,24 +396,24 @@ function update!{L <: Union{BPLayer, BPExactLayer}}(layer::L, r::Float64, ry::Fl
 end
 
 
-function initrand!{L <: Union{BPLayer, BPExactLayer}}(layer::L)
+function initrand!(layer::L) where {L <: Union{BPLayer, BPExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd  top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
     ϵ = 1e-1
     for m in allm
-        m[:] = ϵ*(2*rand(N) - 1)
+        m .= ϵ*(2*rand(N) .- 1)
     end
     for my in allmy
-        my[:] = ϵ*(2*rand(N) - 1)
+        my .= ϵ*(2*rand(N) .- 1)
     end
     for mh in allmh
-        mh[:] = ϵ*(2*rand(M) - 1)
+        mh .= ϵ*(2*rand(M) .- 1)
     end
     for pu in allpu
-        pu[:] = rand(M)
+        pu .= rand(M)
     end
     for pd in allpd
-        pd[:] = rand(M)
+        pd .= rand(M)
     end
 
     # if!isbottomlayer
@@ -426,7 +426,7 @@ function initrand!{L <: Union{BPLayer, BPExactLayer}}(layer::L)
 
 end
 
-function fixW!{L <: Union{BPLayer, BPExactLayer}}(layer::L, w=1.)
+function fixW!(layer::L, w=1.) where {L <: Union{BPLayer, BPExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
@@ -438,7 +438,7 @@ function fixW!{L <: Union{BPLayer, BPExactLayer}}(layer::L, w=1.)
     end
 end
 
-function fixY!{L <: Union{BPLayer, BPExactLayer}}(layer::L, ξ::Matrix)
+function fixY!(layer::L, ξ::Matrix) where {L <: Union{BPLayer, BPExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 

@@ -1,7 +1,7 @@
 using ExtractMacro
 using FastGaussQuadrature
 
-G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
+G(x) = exp(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
 #GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
 function GHapp(x)
@@ -11,7 +11,7 @@ function GHapp(x)
 end
 GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
 
-type FactorGraphTAP
+mutable struct FactorGraphTAP
     N::Int
     M::Int
     ξ::Matrix{Int}
@@ -29,7 +29,7 @@ type FactorGraphTAP
     end
 end
 
-type ReinfParams
+mutable struct ReinfParams
     r::Float64
     r_step::Float64
     γ::Float64
@@ -40,8 +40,8 @@ type ReinfParams
 end
 
 function initrand!(g::FactorGraphTAP)
-    g.m[:] = rand([-1,1], g.N)
-    g.m̂[:] = rand([-1,1], g.M)
+    g.m .= rand([-1,1], g.N)
+    g.m̂ .= rand([-1,1], g.M)
 end
 
 function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
@@ -146,7 +146,7 @@ mags(g::FactorGraphTAP) = g.m
 
 function solve(; N::Int=1000, α::Float64=0.6, seed_ξ::Int=-1, kw...)
     if seed_ξ > 0
-        srand(seed_ξ)
+        Random.seed!(seed_ξ)
     end
     M = round(Int, α * N)
     ξ = rand([-1,1], N, M)
@@ -161,7 +161,7 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
                 altsolv::Bool = true,
                 seed::Int = -1)
 
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
     g = FactorGraphTAP(ξ, σ)
     initrand!(g)
 

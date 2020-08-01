@@ -1,5 +1,4 @@
-
-G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
+G(x) = exp(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
 
 lg2 = log(2)

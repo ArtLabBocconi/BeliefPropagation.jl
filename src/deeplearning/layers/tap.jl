@@ -2,7 +2,7 @@
 ###########################
 #       TAP EXACT LAYER
 #######################################
-type TapExactLayer <: AbstractLayer
+mutable struct TapExactLayer <: AbstractLayer
     l::Int
     K::Int
     N::Int
@@ -72,24 +72,24 @@ end
 
 
 ## Utility fourier tables for the exact theta node
-fexpf(N) = Complex128[exp(2π*im*p/(N+1)) for p=0:N]
-fexpinv0(N) = Complex128[exp(-2π*im*p*(N-1)/2/(N+1)) for p=0:N]
-fexpinv2p(N) = Complex128[(
+fexpf(N) = Complex{Float64}[exp(2π*im*p/(N+1)) for p=0:N]
+fexpinv0(N) = Complex{Float64}[exp(-2π*im*p*(N-1)/2/(N+1)) for p=0:N]
+fexpinv2p(N) = Complex{Float64}[(
         a =exp(-2π*im*p*(N-1)/2/(N+1));
         b = exp(-2π*im*p/(N+1));
         p==0 ? (N+1)/2 : a*b/(1-b)*(1-b^((N+1)/2)))
         for p=0:N]
-fexpinv2m(N) = Complex128[(
+fexpinv2m(N) = Complex{Float64}[(
         a =exp(-2π*im*p*(N-1)/2/(N+1));
         b = exp(2π*im*p/(N+1));
         p==0 ? (N+1)/2 : a*b/(1-b)*(1-b^((N+1)/2)))
         for p=0:N]
-fexpinv2P(N) = Complex128[(
+fexpinv2P(N) = Complex{Float64}[(
         a =exp(-2π*im*p/(N+1)*(N+1)/2);
         b = exp(-2π*im*p/(N+1));
         p==0 ? (N+1)/2 : a/(1-b)*(1-b^((N+1)/2)))
         for p=0:N]
-fexpinv2M(N) = Complex128[(
+fexpinv2M(N) = Complex{Float64}[(
         a =exp(-2π*im*p/(N+1)*(N-1)/2);
         b = exp(2π*im*p/(N+1));
         p==0 ? (N+1)/2 : a/(1-b)*(1-b^((N+1)/2)))
@@ -109,7 +109,7 @@ function updateFact!(layer::TapExactLayer, k::Int)
     for a=1:M
         my = allmy[a]
         MYt = MYtot[a];
-        X = ones(Complex128, N+1)
+        X = ones(Complex{Float64}, N+1)
         if istoplayer(layer)
             for p=1:N+1
                 for i=1:N
@@ -133,8 +133,8 @@ function updateFact!(layer::TapExactLayer, k::Int)
         end
 
         vH = tanh(pdtop[a])
-        s2P = Complex128(0.)
-        s2M = Complex128(0.)
+        s2P = Complex{Float64}(0.)
+        s2M = Complex{Float64}(0.)
         for p=1:N+1
             s2P += expinv2P[p] * X[p]
             s2M += expinv2M[p] * X[p]
@@ -151,9 +151,9 @@ function updateFact!(layer::TapExactLayer, k::Int)
             magW = m[i]
             pup = (1+magY*magW)/2
 
-            s0 = Complex128(0.)
-            s2p = Complex128(0.)
-            s2m = Complex128(0.)
+            s0 = Complex{Float64}(0.)
+            s2p = Complex{Float64}(0.)
+            s2m = Complex{Float64}(0.)
             for p=1:N+1
                 xp = X[p] / (1-pup + pup*expf[p])
                 s0 += expinv0[p] * xp
@@ -181,7 +181,7 @@ end
 ###########################
 #       TAP LAYER
 #######################################
-type TapLayer <: AbstractLayer
+mutable struct TapLayer <: AbstractLayer
     l::Int
 
     K::Int
@@ -292,7 +292,7 @@ function updateFact!(layer::TapLayer, k::Int)
     end
 end
 
-function updateVarW!{L <: Union{TapLayer,TapExactLayer}}(layer::L, k::Int, r::Float64=0.)
+function updateVarW!(layer::L, k::Int, r::Float64=0.) where {L <: Union{TapLayer,TapExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd l
     @extract layer CYtot MYtot Mtot Ctot bottom_allpu allh
     Δ = 0.
@@ -314,7 +314,7 @@ function updateVarW!{L <: Union{TapLayer,TapExactLayer}}(layer::L, k::Int, r::Fl
     return Δ
 end
 
-function updateVarY!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::Float64=0.)
+function updateVarY!(layer::L, a::Int, ry::Float64=0.) where {L <: Union{TapLayer,TapExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd
     @extract layer allhy CYtot MYtot Mtot Ctot bottom_allpu
 
@@ -348,7 +348,7 @@ function updateVarY!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::F
 end
 
 
-function initYBottom!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::Float64=0.)
+function initYBottom!(layer::L, a::Int, ry::Float64=0.) where {L <: Union{TapLayer,TapExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd
     @extract layer allhy CYtot MYtot Mtot Ctot bottom_allpu
 
@@ -361,17 +361,18 @@ function initYBottom!{L <: Union{TapLayer,TapExactLayer}}(layer::L, a::Int, ry::
     end
 end
 
-function update!{L <: Union{TapLayer,TapExactLayer}}(layer::L, r::Float64, ry::Float64)
+function update!(layer::L, r::Float64, ry::Float64) where {L <: Union{TapLayer,TapExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd CYtot MYtot Mtot Ctot
 
 
     #### Reset Total Fields
-    CYtot[:]=0
+    CYtot .= 0
     for a=1:M
-        MYtot[a][:]=0
+        MYtot[a] .= 0
     end
     for k=1:K
-        Mtot[k][:] = 0; Ctot[k] = 0;
+        Mtot[k] .= 0
+        Ctot[k] = 0
     end
     ############
 
@@ -395,27 +396,27 @@ function update!{L <: Union{TapLayer,TapExactLayer}}(layer::L, r::Float64, ry::F
     return Δ
 end
 
-function initrand!{L <: Union{TapExactLayer,TapLayer}}(layer::L)
+function initrand!(layer::L) where {L <: Union{TapExactLayer,TapLayer}}
     @extract layer K N M allm allmy allmh allpu allpd  top_allpd
     ϵ = 1e-1
     for m in allm
-        m[:] = (2*rand(N) - 1)*ϵ
+        m .= (2*rand(N) .- 1)*ϵ
     end
     for my in allmy
-        my[:] = (2*rand(N) - 1)*ϵ
+        my .= (2*rand(N) .- 1)*ϵ
     end
     for mh in allmh
-        mh[:] = (2*rand(M) - 1)*ϵ
+        mh .= (2*rand(M) .- 1)*ϵ
     end
     for pu in allpu
-        pu[:] = rand(M)
+        pu .= rand(M)
     end
     for pd in allpd
-        pd[:] = rand(M)
+        pd .= rand(M)
     end
 end
 
-function fixW!{L <: Union{TapLayer, TapExactLayer}}(layer::L, w=1.)
+function fixW!(layer::L, w=1.) where {L <: Union{TapLayer, TapExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd  top_allpd
 
     for k=1:K, i=1:N
@@ -423,7 +424,7 @@ function fixW!{L <: Union{TapLayer, TapExactLayer}}(layer::L, w=1.)
     end
 end
 
-function fixY!{L <: Union{TapLayer, TapExactLayer}}(layer::L, ξ::Matrix)
+function fixY!(layer::L, ξ::Matrix) where {L <: Union{TapLayer, TapExactLayer}}
     @extract layer K N M allm allmy allmh allpu allpd  top_allpd
 
     for a=1:M, i=1:N

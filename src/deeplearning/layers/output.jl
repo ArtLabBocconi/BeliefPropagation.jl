@@ -1,4 +1,4 @@
-type OutputLayer <: AbstractLayer
+mutable struct OutputLayer <: AbstractLayer
     l::Int
     labels::IVec
     allpd::VecVec # p(σ=up) from fact ↑ to y

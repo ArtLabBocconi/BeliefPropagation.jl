@@ -2,8 +2,8 @@ module MagnetizationsT
 
 using StatsFuns
 
-bitstype 64 Mag64
-
+primitive type Mag64 64 end
+    
 include("Magnetizations_Common.jl")
 
 include("AtanhErf.jl")

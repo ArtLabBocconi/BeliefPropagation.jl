@@ -1,7 +1,7 @@
 using ExtractMacro
 using FastGaussQuadrature
 
-G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
+G(x) = exp(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
 #GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
 function GHapp(x)
@@ -32,7 +32,7 @@ function ∫D(f; n=nint)
 end
 #####################
 
-type FactorGraphTAP
+mutable struct FactorGraphTAP
     N::Int
     M::Int
     K::Int
@@ -74,7 +74,7 @@ type FactorGraphTAP
     end
 end
 
-type ReinfParams
+mutable struct ReinfParams
     y::Int
     y_step::Float64
     γ::Float64
@@ -86,23 +86,23 @@ end
 
 function initrand!(g::FactorGraphTAP)
     for m in g.allm
-        m[:] = 2*rand(g.N) - 1
+        m .= 2*rand(g.N) .- 1
     end
     for (ρ,m) in zip(g.allρ, g.allm)
-        ρ[:] = m.^2 + 1e-4
+        ρ .= m.^2 .+ 1e-4
     end
     for mh in g.allmh
-        mh[:] = 2*rand(g.M) - 1
+        mh = 2*rand(g.M) .- 1
     end
     for (ρh,mh) in zip(g.allρh, g.allmh)
-        ρh[:] = mh.^2 + 1e-4
+        ρh .= mh.^2 .+ 1e-4
     end
     # for pu in g.allpu
-    #     pu[:] = rand(g.M)
+    #     pu .= rand(g.M)
     # end
     # for pd in g.allpd
-    #     # pd[:] = ones(g.M)
-    #     pd[:] = rand(g.M)
+    #     # pd .= ones(g.M)
+    #     pd .= rand(g.M)
     # end
 end
 
@@ -135,14 +135,14 @@ K012(a, b, γ, y) = K0(a, b, γ, y), K1(a, b, γ, y), K2(a, b, γ, y)
 function fourier_mc_node(as, bs, j0s, y, σ, iters=10000)
     K = length(as)
     K2 = div(K-1, 2)
-    expf = Complex128[exp(2π*im*p/K) for p=0:K-1]
-    expinv0 = Complex128[(-1)^p *exp(π*im*p/K) for p=0:K-1]
-    expinvp = Complex128[(
+    expf = Complex{Float64}[exp(2π*im*p/K) for p=0:K-1]
+    expinv0 = Complex{Float64}[(-1)^p *exp(π*im*p/K) for p=0:K-1]
+    expinvp = Complex{Float64}[(
             a =(-1)^p *exp(π*im*p/K);
             b = exp(-2π*im*p/K);
             p==0 ? K2 : a*b/(1-b)*(1-b^K2))
             for p=0:K-1]
-    expinvm = Complex128[(
+    expinvm = Complex{Float64}[(
             a =(-1)^p *exp(π*im*p/K);
             b = exp(2π*im*p/K);
             p==0 ? K2 : a*b/(1-b)*(1-b^K2))
@@ -150,7 +150,7 @@ function fourier_mc_node(as, bs, j0s, y, σ, iters=10000)
     pd = [zeros(y+1) for k=1:K]
     for it=1:iters
         z = rand(K)
-        X = ones(Complex128, K)
+        X = ones(Complex{Float64}, K)
         ps = Float64[H(-as[k]-z[k]*bs[k]) for k=1:K]
         qs = Float64[H(as[k]-z[k]*bs[k]) for k=1:K]
         for p=1:K
@@ -159,9 +159,9 @@ function fourier_mc_node(as, bs, j0s, y, σ, iters=10000)
             end
         end
         for k=1:K
-            s0 = Complex128(0.)
-            sp = Complex128(0.)
-            sm = Complex128(0.)
+            s0 = Complex{Float64}(0.)
+            sp = Complex{Float64}(0.)
+            sm = Complex{Float64}(0.)
             for p=1:K
                 xp = X[p] / (qs[k] + ps[k]*expf[p])
                 s0 += expinv0[p] * xp
@@ -234,7 +234,7 @@ function oneBPiter!(g::FactorGraphTAP)
         j0s = Float64[allj0[k][a] for k=1:K]
         pd = fourier_mc_node(as, bs, j0s, y, σ[a])
         for k=1:K
-            allpd[k][a][:] = pd[k][:]
+            allpd[k][a] .= pd[k]
         end
     end
     #########################################
@@ -331,7 +331,7 @@ mags(g::FactorGraphTAP) = g.allm
 function solve(; N::Int=1000, α::Float64=0.6, seed_ξ::Int=-1,
                     K::Int = 3, kw...)
     if seed_ξ > 0
-        srand(seed_ξ)
+        Random.seed!(seed_ξ)
     end
     M = round(Int, α * K * N)
     ξ = rand([-1,1], N, M)
@@ -348,7 +348,7 @@ function solve(ξ::Matrix{Int}, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Floa
                 altconv::Bool = false,
                 seed::Int = -1)
     @assert K % 2 == 1
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
     g = FactorGraphTAP(ξ, σ, K, γ, y)
     initrand!(g)
 

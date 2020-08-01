@@ -1,4 +1,4 @@
-type TAPGraphIsing
+mutable struct TAPGraphIsing
     N::Int
     adjlist::Vector{Vector{Int}}
     J::Vector{Vector{Float64}}
@@ -13,11 +13,11 @@ deg(g::TAPGraphIsing, i::Integer) = length(g.adjlist[i])
 function TAPGraphIsingRRG(N::Int, k::Int, seed_graph::Int = -1)
     g = random_regular_graph(N, k, seed=seed_graph)
     adjlist = g.fadjlist
-    assert(length(adjlist) == N)
+    @assert(length(adjlist) == N)
     J = [Vector{Float64}() for i=1:N]
 
     for i=1:N
-        assert(length(adjlist[i]) == k)
+        @assert(length(adjlist[i]) == k)
         J[i] = zeros(length(adjlist[i]))
     end
     H = zeros(N)
@@ -119,8 +119,8 @@ function corr_disc_nn(g::TAPGraphIsing, i::Int, j::Int)
     @extract g N adjlist m
     ki = findfirst(adjlist[i], j)
     kj = findfirst(adjlist[j], i)
-    assert(ki > 0)
-    assert(kj > 0)
+    @assert(ki > 0)
+    @assert(kj > 0)
 
     J = g.J[i][ki]
     mi = mag(g, i)
@@ -148,11 +148,11 @@ function corr_disc_nn(g::TAPGraphIsing)
 end
 
 
-setH!(g::TAPGraphIsing, H) = g.H[:] = H
+setH!(g::TAPGraphIsing, H) = g.H  .= H
 
 function setMess!(g::TAPGraphIsing, m)
-    g.m[:] = m
-    g.m_old[:] = m
+    g.m .= m
+    g.m_old .= m
 end
 
 function setMess!(g::TAPGraphIsing, i::Integer, m::Float64)
@@ -161,9 +161,9 @@ function setMess!(g::TAPGraphIsing, i::Integer, m::Float64)
 end
 
 function setJ!(g::TAPGraphIsing, J::Vector{Vector})
-    assert(g.N == length(J))
+    @assert(g.N == length(J))
     for i=1:g.N
-        assert(length(g.adjlist[i]) == length(J[i]))
+        @assert(length(g.adjlist[i]) == length(J[i]))
         for k=1:deg(g, i)
             g.J[i][k] = J[i][k]
         end
@@ -173,8 +173,8 @@ end
 function setJ!(g::TAPGraphIsing, i::Int, j::Int, J)
     ki = findfirst(g.adjlist[i],j)
     kj = findfirst(g.adjlist[j],i)
-    assert(ki > 0)
-    assert(kj > 0)
+    @assert(ki > 0)
+    @assert(kj > 0)
     g.J[i][ki] = J
     g.J[j][kj] = J
 end

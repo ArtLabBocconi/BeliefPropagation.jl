@@ -13,7 +13,7 @@ Base.show(p::Ptr) = show(p[])
 getref(v::Vector, i::Integer) = pointer(v, i)
 Mess() = Mess(0.)
 
-G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
+G(x) = exp(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
 #GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
 function GHapp(x)
@@ -32,11 +32,11 @@ GH(x, β) = β == Inf ? GH(x) : GHapp(x, β) #x > 30.0 ? GHapp(x, β) : G(x, β)
 #     # NOTE: not a very good approximation when x is large and β is not
 #     y = 1/x
 #     y2 = y^2
-#     a = e^(-β + (x^2)/2) / ((1 - e^(-β)) * √(2π))
+#     a = exp(-β + (x^2)/2) / ((1 - exp(-β)) * √(2π))
 #     return x / (x * a + 1 - y2 * (1 - 3y2 * (1 - 5y2)))
 # end
 GHapp(x, β) = exp(log(G(x, β)) - log(H(x, β)))
-type Fact
+mutable struct Fact
     m::VMess
     ρ::VMess
     mh::VPMess
@@ -47,7 +47,7 @@ end
 
 Fact(ξ, σ) = Fact(VMess(),VMess(), VPMess(), VPMess(), ξ, σ)
 
-type Var
+mutable struct Var
     mh::VMess
     ρh::VMess
     m::VPMess
@@ -61,7 +61,7 @@ end
 
 Var() = Var(VMess(), VMess(), VPMess(), VPMess(), 0., Mess(0), Mess(0))
 
-type FactorGraph
+mutable struct FactorGraph
     N::Int
     M::Int
     β::Float64
@@ -112,7 +112,7 @@ type FactorGraph
     end
 end
 
-type ReinfParams
+mutable struct ReinfParams
     r::Float64
     rstep::Float64
     γ::Float64
@@ -127,12 +127,12 @@ deg(v::Var) = length(v.m)
 
 function initrand!(g::FactorGraph)
     for f in g.fnodes
-        f.m[:] = (2*rand(deg(f)) - 1)/2
-        f.ρ[:] = 1e-5
+        f.m .= (2*rand(deg(f)) .- 1)/2
+        f.ρ .= 1e-5
     end
     for v in g.vnodes
-        v.mh[:] = (2*rand(deg(v)) - 1)/2
-        v.ρh[:] = 1e-5
+        v.mh .= (2*rand(deg(v)) .- 1)/2
+        v.ρh .= 1e-5
     end
 end
 
@@ -280,7 +280,7 @@ mags(g::FactorGraph) = Float64[mag(v) for v in g.vnodes]
 
 
 function solve_test(; N::Int=1000, α::Float64=0.6, biasξ = 0., seedξ::Int=-1, kw...)
-    seedξ > 0 && srand(seedξ)
+    seedξ > 0 && Random.seed!(seedξ)
     M = round(Int, α * N)
     # ξ = rand([-1.,1.], N, M)
     ξ = randn(N, M)
@@ -299,7 +299,7 @@ function solve_test(; N::Int=1000, α::Float64=0.6, biasξ = 0., seedξ::Int=-1,
 end
 
 function solve(; N::Int=1000, α::Float64=0.6, biasξ = 0., seedξ::Int=-1, kw...)
-    seedξ > 0 && srand(seedξ)
+    seedξ > 0 && Random.seed!(seedξ)
     M = round(Int, α * N)
     ξ = rand([-1.,1.], N, M) + biasξ
     if biasξ != 0
@@ -320,7 +320,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 altsolv::Bool = true, altconv = true,
                 seed::Int = -1)
 
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
     g = FactorGraph(ξ, σ, λ, β=β)
     initrand!(g)
 

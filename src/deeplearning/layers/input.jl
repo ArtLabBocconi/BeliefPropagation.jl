@@ -1,4 +1,4 @@
-type InputLayer <: AbstractLayer
+mutable struct InputLayer <: AbstractLayer
     l::Int
     allpu::VecVec # p(σ=up) from fact ↑ to y
     isbinary::Bool

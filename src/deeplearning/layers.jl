@@ -4,8 +4,8 @@ and modifies its allpu and allpd
 """
 ∞ = 10000
 
-abstract AbstractLayer
-type DummyLayer <: AbstractLayer
+abstract type AbstractLayer end
+mutable struct DummyLayer <: AbstractLayer
 end
 
 include("layers/input.jl")
@@ -21,7 +21,7 @@ istoplayer(layer::AbstractLayer) = (typeof(layer.top_layer) == OutputLayer)
 isbottomlayer(layer::AbstractLayer) = (typeof(layer.bottom_layer) == InputLayer)
 isonlylayer(layer::AbstractLayer) = istoplayer(layer) && isbottomlayer(layer)
 
-function Base.show{L <: Union{TapExactLayer,TapLayer}}(io::IO, layer::L)
+function Base.show(io::IO, layer::L) where {L <: Union{TapExactLayer,TapLayer}}
     @extract layer K N M allm allmy allmh allpu allpd
     println(io, "m=$(allm[1])")
     println(io, "my=$(allmy[1])")
@@ -70,7 +70,7 @@ function forwardParity(lay::AbstractLayer, ξ::Vector)
     return σks, stability
 end
 
-# initYBottom!(lay::AbstractLayer, a::Int) = updateVarY!(lay, a) #TODO define for every layer type
+# initYBottom!(lay::AbstractLayer, a::Int) = updateVarY!(lay, a) #TODO define for every layer mutable struct
 
 chain!(lay1::InputLayer, lay2::OutputLayer) = error("Cannot chain InputLayer and OutputLayer")
 
@@ -80,7 +80,7 @@ function chain!(lay1::AbstractLayer, lay2::OutputLayer)
     lay1.top_layer = lay2
 end
 
-function chain!{L <: AbstractLayer}(lay1::InputLayer, lay2::L)
+function chain!(lay1::InputLayer, lay2::AbstractLayer)
     lay2.l = lay1.l+1
     lay2.bottom_allpu = lay1.allpu
     lay2.bottom_layer = lay1

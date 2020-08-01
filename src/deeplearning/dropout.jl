@@ -1,4 +1,4 @@
-type Dropout
+mutable struct Dropout
     drops::Dict{Int,Set{Pair{Int,Int}}}   # level => {k,μ} to drop
 end
 function Dropout()

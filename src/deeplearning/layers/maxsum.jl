@@ -1,5 +1,5 @@
 # NOTE le m in realtà sono tutte dei campi
-type MaxSumLayer <: AbstractLayer
+mutable struct MaxSumLayer <: AbstractLayer
     l::Int
     K::Int
     N::Int
@@ -59,7 +59,7 @@ function MaxSumLayer(K::Int, N::Int, M::Int; βms=1., rms=1.)
 end
 
 
-function updateVarW!{L <: Union{MaxSumLayer}}(layer::L, k::Int, r::Float64=0.)
+function updateVarW!(layer::MaxSumLayer, k::Int, r::Float64=0.)
     @extract layer K N M allm allmy allmh allpu allpd allhy allh rms
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
@@ -93,7 +93,7 @@ function updateVarW!{L <: Union{MaxSumLayer}}(layer::L, k::Int, r::Float64=0.)
     return Δ
 end
 
-function updateVarY!{L <: Union{MaxSumLayer}}(layer::L, a::Int, ry::Float64=0.)
+function updateVarY!(layer::MaxSumLayer, a::Int, ry::Float64=0.)
     @extract layer K N M allm allmy allmh allpu allpd allhy βms
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
@@ -126,7 +126,7 @@ function updateVarY!{L <: Union{MaxSumLayer}}(layer::L, a::Int, ry::Float64=0.)
 end
 
 
-function initYBottom!{L <: Union{MaxSumLayer}}(layer::L, a::Int, ry::Float64=0.)
+function initYBottom!(layer::MaxSumLayer, a::Int, ry::Float64=0.)
     @extract layer K N M allm allmy allmh allpu allpd allhy βms
     @extract layer bottom_allpu top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
@@ -174,7 +174,7 @@ function updateFact!(layer::MaxSumLayer, k::Int)
         end
 
         π = sortperm(ϕ)
-        ϕ[:] = ϕ[π]
+        ϕ .= ϕ[π]
         km = searchsortedlast(ϕ,-1.)+1
         # km = searchsortedfirst(ϕ,-1.)
         k0m = searchsortedfirst(ϕ,0.)
@@ -331,7 +331,7 @@ function updateFact!(layer::MaxSumLayer, k::Int)
 end
 
 
-function update!{L <: Union{MaxSumLayer}}(layer::L, r::Float64, ry::Float64)
+function update!(layer::MaxSumLayer, r::Float64, ry::Float64)
     @extract layer K N M allm allmy allmh allpu allpd
     # println(layer)
     for k=1:K
@@ -354,28 +354,28 @@ function update!{L <: Union{MaxSumLayer}}(layer::L, r::Float64, ry::Float64)
     return Δ
 end
 
-function Base.show{L <: Union{MaxSumLayer}}(io::IO, layer::L)
+function Base.show(io::IO, layer::MaxSumLayer)
     for f in fieldnames(layer)
         println(io, "$f=$(getfield(layer,f))")
     end
 end
 
 
-function initrand!{L <: Union{MaxSumLayer}}(layer::L)
+function initrand!(layer::MaxSumLayer)
     @extract layer K N M allm allmy allmh allpu allpd  top_allpd
     @extract layer allmcav allmycav allmhcavtow allmhcavtoy
 
     for m in allm
-        m[:] = rand([-1,1],N)
+        m .= rand([-1,1], N)
     end
     for my in allmy
-        my[:] = rand([-1,1],N)
+        my .= rand([-1,1], N)
     end
     for mh in allmh
-        mh[:] = rand([-1,1],M)
+        mh .= rand([-1,1], M)
     end
     for pu in allpu
-        pu[:] = rand([-1,1],M)
+        pu .= rand([-1,1], M)
     end
 
     for k=1:K,a=1:M,i=1:N
@@ -388,7 +388,7 @@ function initrand!{L <: Union{MaxSumLayer}}(layer::L)
 end
 
 
-function fixY!{L <: Union{MaxSumLayer}}(layer::L, ξ::Matrix)
+function fixY!(layer::MaxSumLayer, ξ::Matrix)
     @extract layer K N M allm allmy allmh allpu allpd  top_allpd
 
     for a=1:M, i=1:N

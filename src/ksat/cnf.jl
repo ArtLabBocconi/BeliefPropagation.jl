@@ -1,4 +1,4 @@
-type CNF
+mutable struct CNF
     N::Int
     M::Int
     clauses::Vector{Vector{Int}}
@@ -6,7 +6,7 @@ end
 
 function CNF(N::Int, k::Int, α::Float64; seed::Int=-1)
     if seed > 0
-        srand(seed)
+        Random.seed!(seed)
     end
     M = round(Int, N*α)
     clauses = Vector{Vector{Int}}()

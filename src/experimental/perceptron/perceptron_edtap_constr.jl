@@ -3,7 +3,7 @@ using ExtractMacro
 using FastGaussQuadrature
 using JLD
 
-G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
+G(x) = exp(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
 #GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
 function GHapp(x)
@@ -44,7 +44,7 @@ nint=100 #change by solve
 # end
 ###########
 
-type OrderParams
+mutable struct OrderParams
     m::Float64
     mt::Float64
     q0::Float64
@@ -62,7 +62,7 @@ type OrderParams
 end
 OrderParams()=OrderParams(zeros(14)...)
 
-type ThermFunc
+mutable struct ThermFunc
     ϕ::Float64
     Σext::Float64
     Σint::Float64
@@ -89,7 +89,7 @@ function reset!(tf::ThermFunc)
     end
 end
 
-type FactorGraphTAP
+mutable struct FactorGraphTAP
     N::Int
     M::Int
     ξ::Matrix{Float64}
@@ -124,7 +124,7 @@ type FactorGraphTAP
     end
 end
 
-type ReinfParams
+mutable struct ReinfParams
     r::Float64
     r_step::Float64
     γ::Float64
@@ -135,15 +135,15 @@ type ReinfParams
 end
 
 function initrand!(g::FactorGraphTAP)
-    g.mt[:] = (2*rand(g.N) - 1)/2
-    g.m[:] = g.mt[:] + 1e-3*(2*rand(g.N) - 1)
-    g.ρ[:] = g.m[:].^2 + 1e-2
-    g.ρt[:] = g.mt[:].* g.m[:] + 1e-4
+    g.mt .= (2*rand(g.N) .- 1) ./ 2
+    g.m  .= g.mt .+ 1e-3*(2*rand(g.N) .- 1)
+    g.ρ .= g.m.^2 + 1e-2
+    g.ρt .= g.mt .* g.m .+ 1e-4
 
-    g.mth[:] = (2*rand(g.M) - 1)/2
-    g.mh[:] = g.mth[:] + 1e-3*(2*rand(g.M) - 1)
-    g.ρh[:] = g.mh[:].^2  + 1e-2
-    g.ρth[:] = g.mth[:].* g.mh[:] + 1e-4
+    g.mth .= (2*rand(g.M) .- 1) ./ 2
+    g.mh .= g.mth .+ 1e-3*(2*rand(g.M) - 1)
+    g.ρh .= g.mh.^2  .+ 1e-2
+    g.ρth .= g.mth .* g.mh .+ 1e-4
 end
 
 ### Update functions
@@ -673,7 +673,7 @@ mags(g::FactorGraphTAP) = g.m
 
 function solve(; N::Int=1000, α = 0.6, seedξ = -1, kw...)
     if seedξ > 0
-        srand(seedξ)
+        Random.seed!(seedξ)
     end
     M = round(Int, α * N)
     ξ = rand([-1.,1.], N, M)
@@ -690,7 +690,7 @@ function solve(ξ::Matrix{Float64}, σ::Vector{Int}; maxiters = 10000, ϵ = 1e-4
                 n= 100,
                 seed::Int = -1)
     global nint = n
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
     g = FactorGraphTAP(ξ, σ, γ, y)
     initrand!(g)
 
@@ -715,7 +715,7 @@ function span(;N=2001, lstα = 0.5, lstγ = 0., n=100, y=0.,
 	resfile = "perc_edtap_constr.new.txt")
 
 	global nint = n
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
 	results = Any[]
 	lockfile = "reslock.tmp"
 
@@ -768,7 +768,7 @@ function span_committe(;K=[301,5], α = 0.2, lstγ = 0.
 	lockfile = "reslock.tmp"
 
     if loadξτ == ""
-        seedξ > 0 && srand(seedξ)
+        seedξ > 0 && Random.seed!(seedξ)
         numW = length(K)==2 ? K[1]*K[2]  : sum(l->K[l]*K[l+1],1:length(K)-2)
         N = K[1]
         M = round(Int, α * numW)

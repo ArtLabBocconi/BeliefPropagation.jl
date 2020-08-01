@@ -1,11 +1,12 @@
 using ExtractMacro
+using Printf
 
-typealias MessU Float64  
-typealias PU Ptr{MessU}
-typealias VU Vector{MessU}
-typealias VPU Vector{PU}
+const MessU = Float64  
+const PU = Ptr{MessU}
+const VU = Vector{MessU}
+const VPU = Vector{PU}
 
-type VarIsing
+mutable struct VarIsing
     uin::Vector{MessU}
     uout::Vector{PU}
     tJ::Vector{Float64}
@@ -14,8 +15,9 @@ end
 
 VarIsing() = VarIsing(VU(),VPU(), Vector{Float64}(), 0.)
 
-abstract FactorGraph
-type FactorGraphIsing <: FactorGraph
+abstract type FactorGraph end
+
+mutable struct FactorGraphIsing <: FactorGraph
     N::Int
     vnodes::Vector{VarIsing}
     adjlist::Vector{Vector{Int}}
@@ -25,12 +27,12 @@ end
 function FactorGraphIsingRRG(N::Int, k::Int, seed_graph::Int = -1)
     g = random_regular_graph(N, k, seed=seed_graph)
     adjlist = g.fadjlist
-    assert(length(adjlist) == N)
+    @assert(length(adjlist) == N)
     vnodes = [VarIsing() for i=1:N]
     J = [Vector{Float64}() for i=1:N]
 
     for (i,v) in enumerate(vnodes)
-        assert(length(adjlist[i]) == k)
+        @assert(length(adjlist[i]) == k)
         resize!(v.uin, length(adjlist[i]))
         resize!(v.uout, length(adjlist[i]))
         resize!(v.tJ, length(adjlist[i]))
@@ -132,8 +134,8 @@ function corr_conn_nn(g::FactorGraphIsing, i::Int, j::Int)
     vj = vnodes[j]
     ki = findfirst(adjlist[i], j)
     kj = findfirst(adjlist[j], i)
-    assert(ki >0)
-    assert(kj >0)
+    @assert(ki >0)
+    @assert(kj >0)
 
     tJ = vi.tJ[ki]
     mij = tanh(htot(vi) - vi.uin[ki])
@@ -159,7 +161,7 @@ function corr_disc_nn(g::FactorGraphIsing)
 end
 
 function setH!(g::FactorGraphIsing, H::Vector)
-    assert(g.N == length(H))
+    @assert(g.N == length(H))
     for (i,v) in enumerate(g.vnodes)
         v.H = H[i]
     end
@@ -172,7 +174,7 @@ function setH!(g::FactorGraphIsing, H::Float64)
 end
 
 function setMess!(g::FactorGraphIsing, H::Vector)
-    assert(g.N == length(H))
+    @assert(g.N == length(H))
     for (i,v) in enumerate(g.vnodes)
         for k=1:deg(v)
             v.uin[k] = H[i]
@@ -181,9 +183,9 @@ function setMess!(g::FactorGraphIsing, H::Vector)
 end
 
 function setJ!(g::FactorGraphIsing, J::Vector{Vector})
-    assert(g.N == length(J))
+    @assert(g.N == length(J))
     for (i,v) in enumerate(g.vnodes)
-        assert(deg(v) == length(J[i]))
+        @assert(deg(v) == length(J[i]))
         for k=1:deg(v)
             v.tJ[k] = tanh(J[i][k])
             g.J[i][k] = J[i][k]
@@ -196,8 +198,8 @@ function setJ!(g::FactorGraphIsing, i::Int, j::Int, J)
     vj = g.vnodes[j]
     ki = findfirst(g.adjlist[i],j)
     kj = findfirst(g.adjlist[j],i)
-    assert(ki >0)
-    assert(kj >0)
+    @assert(ki >0)
+    @assert(kj >0)
     g.J[i][ki] = J
     g.J[j][kj] = J
     vi.tJ[ki] = tanh(J)

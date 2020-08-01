@@ -3,7 +3,7 @@ using FastGaussQuadrature
 
 #TODO praticamente tutto
 
-G(x) = e^(-(x^2)/2) / √(convert(typeof(x),2) * π)
+G(x) = exp(-(x^2)/2) / √(convert(typeof(x),2) * π)
 H(x) = erfc(x / √convert(typeof(x),2)) / 2
 #GH(x) = ifelse(x > 30.0, x+(1-2/x^2)/x, G(x) / H(x))
 function GHapp(x)
@@ -13,7 +13,7 @@ function GHapp(x)
 end
 GH(x) = x > 30.0 ? GHapp(x) : G(x) / H(x)
 
-type FactorGraphTAP{T}
+mutable struct FactorGraphTAP{T}
     N::Int
     M::Int
     ξ::Matrix{T}
@@ -38,7 +38,7 @@ type FactorGraphTAP{T}
     end
 end
 
-type ReinfParams
+mutable struct ReinfParams
     r::Float64
     r_step::Float64
     γ::Float64
@@ -50,10 +50,10 @@ end
 
 function initrand!(g::FactorGraphTAP)
     @extract g N M m ρ mh ρh h1 h2 ξ ξ2 σ λ Mtot Ctot
-    m[:] = (2*rand(N) - 1)/2
-    ρ[:] = 1e-5
-    mh[:] = (2*rand(M) - 1)/2
-    ρh[:] = 1e-5
+    m .= (2*rand(N) .- 1)/2
+    ρ .= 1e-5
+    mh .= (2*rand(M) .- 1)/2
+    ρh .= 1e-5
 
     #bookkeeping variables
     for i=1:N
@@ -65,8 +65,8 @@ end
 function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
     @extract g N M m ρ mh ρh h1 h2 ξ ξ2 σ λ Mtot Ctot
 
-    Mtot[:] = 0
-    Ctot[:] = 0
+    Mtot .= 0
+    Ctot .= 0
     Δh = 0
     for a in 1:M
         Chtot = dot(ξ2[:,a], ρ)
@@ -77,8 +77,8 @@ function oneBPiter!(g::FactorGraphTAP, r::Float64=0.)
         oldm = mh[a]
         mh[a] = σ[a]/ sqrt(Chtot) * gh
         ρh[a] = 1/Chtot *(x*gh + gh^2)
-        Mtot[:] += ξ[:, a] * mh[a]
-        Ctot[:] += ξ2[:, a] * ρh[a]
+        Mtot .+= ξ[:, a] * mh[a]
+        Ctot .+= ξ2[:, a] * ρh[a]
         Δh = max(Δh, abs(mh[a] - oldm))
     end
 
@@ -154,7 +154,7 @@ mags(g::FactorGraphTAP) = g.m
 
 function solve(; N::Int=1000, α::Float64=0.6, seed_ξ::Int=-1, kw...)
     if seed_ξ > 0
-        srand(seed_ξ)
+        Random.seed!(seed_ξ)
     end
     M = round(Int, α * N)
     ξ = rand([-1.,1.], N, M)
@@ -169,7 +169,7 @@ function solve(ξ::Matrix, σ::Vector{Int}; maxiters::Int = 10000, ϵ::Float64 =
                 altsolv::Bool = true,altconv=false,
                 seed::Int = -1)
 
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
     g = FactorGraphTAP{Float64}(ξ, σ, λ)
     initrand!(g)
 

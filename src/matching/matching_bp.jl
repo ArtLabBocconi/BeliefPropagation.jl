@@ -1,18 +1,20 @@
 using ExtractMacro
-typealias MessU Float64  # ̂ν(a→i) = P(σ_i != J_ai)
-typealias MessH Float64 #  ν(i→a) = P(σ_i != J_ai)
+using Printf
+
+const MessU = Float64  # ̂ν(a→i) = P(σ_i != J_ai)
+const MessH = Float64 #  ν(i→a) = P(σ_i != J_ai)
 
 getref(v::Vector, i::Integer) = pointer(v, i)
 
-typealias PU Ptr{MessU}
-typealias PH Ptr{MessH}
+const PU = Ptr{MessU}
+const PH = Ptr{MessH}
 
-typealias VU Vector{MessU}
-typealias VH Vector{MessH}
-typealias VRU Vector{PU}
-typealias VRH Vector{PH}
+const VU = Vector{MessU}
+const VH = Vector{MessH}
+const VRU = Vector{PU}
+const VRH = Vector{PH}
 
-type Fact
+mutable struct Fact
     h::VH
     u::VRU
     neigs::Vector{Int}
@@ -20,7 +22,7 @@ end
 
 Fact() = Fact(VH(), VRU(), Int[])
 
-type Var
+mutable struct Var
     E::Float64
     u::VU
     h::VRH
@@ -35,7 +37,7 @@ Var() = Var(0., VU(), VRH(), MessH(0), Int[])
 Multi-index matching on d-partite hypergraph with
 N*d nodes and N*γ hyperedges (factors and variables respectively)
 """
-type FactorGraph
+mutable struct FactorGraph
     N::Int
     d::Int
     γ::Float64
@@ -99,7 +101,7 @@ type FactorGraph
     end
 end
 
-type ReinfParams
+mutable struct ReinfParams
     r::Float64
     rstep::Float64
     wait_count::Int
@@ -274,7 +276,7 @@ function solve(;N=200, d=2, γ=40.,
                 maxiters::Int = 10000, ϵ::Float64 = 1e-4,
                 r::Float64 = 0., rstep::Float64= 0.00,
                 seed::Int = -1, ismonopartite=false)
-    seed > 0 && srand(seed)
+    seed > 0 && Random.seed!(seed)
     g = FactorGraph(N, d, γ, ismonopartite=ismonopartite)
     initrand!(g)
     reinfpar = ReinfParams(r, rstep)
