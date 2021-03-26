@@ -4,8 +4,6 @@ using Printf
 const MessU = Float64  # ̂ν(a→i) = P(σ_i != J_ai)
 const MessH = Float64 #  ν(i→a) = P(σ_i != J_ai)
 
-getref(v::Vector, i::Integer) = pointer(v, i)
-
 const PU = Ptr{MessU}
 const PH = Ptr{MessH}
 

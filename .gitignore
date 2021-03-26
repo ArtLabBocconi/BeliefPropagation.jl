@@ -4,5 +4,6 @@
 *.jld
 *.dat
 *.txt
+Manifest.toml
 pf_committee/
 res_parisifranz

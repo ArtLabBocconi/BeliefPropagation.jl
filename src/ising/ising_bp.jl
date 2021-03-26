@@ -1,19 +1,25 @@
 using ExtractMacro
 using Printf
 
-const MessU = Float64  
-const PU = Ptr{MessU}
-const VU = Vector{MessU}
-const VPU = Vector{PU}
+const T = Float64  
 
 mutable struct VarIsing
-    uin::Vector{MessU}
-    uout::Vector{PU}
-    tJ::Vector{Float64}
-    H::Float64
+    uin::Vector{T}
+    uout::Vector{Ptr{T}}
+    tJ::Vector{T}
+    H::T
 end
 
-VarIsing() = VarIsing(VU(),VPU(), Vector{Float64}(), 0.)
+VarIsing() = VarIsing(Vector{T}(), Vector{Ptr{T}}(), Vector{T}(), 0)
+
+htot(v::VarIsing) = sum(v.uin) + v.H
+mag(v::VarIsing) = tanh(htot(v))
+deg(v::VarIsing) = length(v.uin)
+
+function Base.show(io::IO, v::VarIsing)
+    print(io, "VarIsing(deg=$(deg(v)), H=$(v.H))")
+end
+
 
 abstract type FactorGraph end
 
@@ -21,7 +27,8 @@ mutable struct FactorGraphIsing <: FactorGraph
     N::Int
     vnodes::Vector{VarIsing}
     adjlist::Vector{Vector{Int}}
-    J::Vector{Vector{Float64}}
+    J::Vector{Vector{T}}
+    mags::Vector{T}
 end
 
 function FactorGraphIsingRRG(N::Int, k::Int, seed_graph::Int = -1)
@@ -29,111 +36,97 @@ function FactorGraphIsingRRG(N::Int, k::Int, seed_graph::Int = -1)
     adjlist = g.fadjlist
     @assert(length(adjlist) == N)
     vnodes = [VarIsing() for i=1:N]
-    J = [Vector{Float64}() for i=1:N]
+    J = [Vector{T}() for i=1:N]
 
-    for (i,v) in enumerate(vnodes)
+    for (i, v) in enumerate(vnodes)
         @assert(length(adjlist[i]) == k)
         resize!(v.uin, length(adjlist[i]))
         resize!(v.uout, length(adjlist[i]))
         resize!(v.tJ, length(adjlist[i]))
-        resize!(v.tJ, length(adjlist[i]))
         resize!(J[i], length(adjlist[i]))
     end
 
-    for (i,v) in enumerate(vnodes)
-        for (ki,j) in enumerate(adjlist[i])
-            v.uin[ki] = MessU(i)
-            kj = findfirst(adjlist[j], i)
+    for (i, v) in enumerate(vnodes)
+        for (ki, j) in enumerate(adjlist[i])
+            v.uin[ki] = 0
+            kj = findfirst(==(i), adjlist[j])
             vnodes[j].uout[kj] = getref(v.uin, ki)
-            v.tJ[ki] = 0.
-            J[i][ki] = 0.
+            v.tJ[ki] = 0
+            J[i][ki] = 0
         end
     end
 
-    FactorGraphIsing(N, vnodes, adjlist, J)
+    mags = mag.(vnodes)
+
+    FactorGraphIsing(N, vnodes, adjlist, J, mags)
 end
 
-deg(v::VarIsing) = length(v.uin)
-
-
-function initrandJ!(g::FactorGraphIsing; m::Float64=0., σ::Float64=1.)
+function initrandJ!(g::FactorGraphIsing; μ=0, σ=1)
     for (i,v) in enumerate(g.vnodes)
         for (ki, j) in enumerate(g.adjlist[i])
             (i > j) && continue
-            r = m + σ * (rand() - 0.5)
+            r = μ + σ * randn()
             g.J[i][ki] = r
             g.vnodes[i].tJ[ki] = tanh(r)
-            kj = findfirst(g.adjlist[j], i)
+            kj = findfirst(==(i), g.adjlist[j])
             g.vnodes[j].tJ[kj] = g.vnodes[i].tJ[ki]
             g.J[j][kj] = g.J[i][ki]
         end
     end
 end
 
-function initrandH!(g::FactorGraphIsing; m::Float64=0., σ::Float64=1.)
+function initrandH!(g::FactorGraphIsing; μ=0, σ=1)
     for v in g.vnodes
-        v.H = m + σ * (rand() - 0.5)
+        v.H = μ + σ * randn()
     end
 end
 
-function initrandMess!(g::FactorGraphIsing; m::Float64=1., σ::Float64=1.)
+function initrandMess!(g::FactorGraphIsing; μ=0, σ=1)
     for v in g.vnodes
         for k=1:deg(v)
-            v.uin[k] = m + σ * (rand() - 0.5)
+            v.uin[k] = μ + σ * randn()
         end
     end
 end
 
 function update!(v::VarIsing)
-    @extract v uin uout tJ
-    Δ = 0.
+    @extract v: uin uout tJ
     ht = htot(v)
     for k=1:deg(v)
         hcav = ht - uin[k]
-        ucav = atanh(tJ[k]*tanh(hcav))
-        Δ = max(Δ, abs(ucav  - uout[k][]))
+        ucav = atanh(tJ[k] * tanh(hcav))
         uout[k][] = ucav
     end
-    Δ
 end
 
 function oneBPiter!(g::FactorGraphIsing)
-    Δ = 0.
-    for i=randperm(g.N)
-        d = update!(g.vnodes[i])
-        Δ = max(Δ, d)
+    for i in randperm(g.N)
+        update!(g.vnodes[i])
     end
-    Δ
+    new_mags = mag.(g.vnodes)
+    Δ = mean(abs, new_mags .- g.mags)
+    g.mags .= new_mags    
+    return Δ
 end
 
-function converge!(g::FactorGraphIsing; maxiters::Int = 1000, ϵ::Float64=1e-6, verbose::Bool=false)
+function converge!(g::FactorGraphIsing; maxiters=1000, ϵ=1e-6, verbose=true)
     for it=1:maxiters
-        if verbose
-            write("it=$it ... ")
-        end
+        verbose && print("it=$it ... ")
         Δ = oneBPiter!(g)
-        if verbose
-            @printf("Δ=%f \n", Δ)
-        end
+        verbose && @printf("Δ=%.2g \n", Δ)
         if Δ < ϵ
-            if verbose
-                println("Converged!")
-            end
+            verbose && println("Converged!")
             break
         end
     end
 end
 
-htot(v::VarIsing) = sum(v.uin) + v.H
-mag(v::VarIsing) = tanh(htot(v))
-mags(g::FactorGraphIsing) = Float64[mag(v) for v in g.vnodes]
-
 function corr_conn_nn(g::FactorGraphIsing, i::Int, j::Int)
-    @extract g N vnodes adjlist
+    @extract g: N vnodes adjlist
     vi = vnodes[i]
     vj = vnodes[j]
-    ki = findfirst(adjlist[i], j)
-    kj = findfirst(adjlist[j], i)
+    ki = findfirst(==(j), adjlist[i])
+    kj = findfirst(==(i), adjlist[j])
     @assert(ki >0)
     @assert(kj >0)
 
@@ -142,6 +135,7 @@ function corr_conn_nn(g::FactorGraphIsing, i::Int, j::Int)
     mji = tanh(htot(vj) - vj.uin[kj])
 
     c = tJ * (1-mij^2)*(1-mji^2) / (1+tJ * mij * mji)
+    return c
 end
 
 corr_disc_nn(g::FactorGraphIsing,i::Int,j::Int) = corr_conn_nn(g,i,j) + mag(g.vnodes[i])*mag(g.vnodes[j])
@@ -196,27 +190,30 @@ end
 function setJ!(g::FactorGraphIsing, i::Int, j::Int, J)
     vi = g.vnodes[i]
     vj = g.vnodes[j]
-    ki = findfirst(g.adjlist[i],j)
-    kj = findfirst(g.adjlist[j],i)
-    @assert(ki >0)
-    @assert(kj >0)
+    ki = findfirst(==(j), g.adjlist[i])
+    kj = findfirst(==(i), g.adjlist[j])
+    @assert(ki > 0)
+    @assert(kj > 0)
     g.J[i][ki] = J
     g.J[j][kj] = J
     vi.tJ[ki] = tanh(J)
     vj.tJ[kj] = vi.tJ[ki]
-
 end
 
 function getJ(g::FactorGraphIsing, i::Int, j::Int)
-    ki = findfirst(g.adjlist[i],j)
+    ki = findfirst(==(j), g.adjlist[i])
     g.J[i][ki]
 end
 
-function mainIsing(; N::Int = 1000, k::Int = 4, β::Float64 = 1., maxiters::Int = 1000, ϵ::Float64=1e-6)
+function main_ising(; N::Int=1000, k::Int=4, 
+                    β = 1., 
+                    μJ=0, σJ=1,
+                    μH=0, σH=1,
+                    maxiters::Int=1000, ϵ=1e-6)
     g = FactorGraphIsingRRG(N, k)
-    initrandJ!(g, m=β, σ=0.)
-    initrandH!(g, m=0., σ=0.)
-    initrandMess!(g, m=1., σ=1.)
+    initrandJ!(g, μ=β*μJ, σ=β*σJ)
+    initrandH!(g, μ=β*μH, σ=β*σH)
+    initrandMess!(g, μ=0, σ=1)
     converge!(g, maxiters=maxiters, ϵ=ϵ)
-    return mean(mags(g))
+    return g
 end

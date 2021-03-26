@@ -1,4 +1,8 @@
-# BeliefPropagation
+# BeliefPropagation.jl
 
-[![Build Status](https://travis-ci.com/carlo/BeliefPropagation.jl.svg?branch=master)](https://travis-ci.com/carlo/BeliefPropagation.jl)
-[![Coverage](https://codecov.io/gh/carlo/BeliefPropagation.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/carlo/BeliefPropagation.jl)
+Implementation of Belief Propagation (BP) message passing for:
+
+- Ising model (`Ising` module)
+- Minimum weight perfect matching (`Matching` module)
+
+See the `test/` folder for usage examples.
