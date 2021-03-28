@@ -16,14 +16,15 @@ module Matching
 end
 
 module Ising
-    using LightGraphs
+    using Erdos
     using Random, Statistics
-
+    using ExtractMacro
+    using Printf
+    
     getref(v::Vector, i::Integer) = pointer(v, i)
 
     include("ising/ising_bp.jl")
     include("ising/ising_tap.jl")
-    include("ising/ising_mc.jl")
     include("ising/learning_hopfield.jl")
 end
 

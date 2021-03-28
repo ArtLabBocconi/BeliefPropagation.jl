@@ -1,6 +1,3 @@
-using ExtractMacro
-using Printf
-
 const T = Float64  
 
 mutable struct VarIsing
@@ -31,15 +28,17 @@ mutable struct FactorGraphIsing <: FactorGraph
     mags::Vector{T}
 end
 
-function FactorGraphIsingRRG(N::Int, k::Int, seed_graph::Int = -1)
-    g = random_regular_graph(N, k, seed=seed_graph)
-    adjlist = g.fadjlist
-    @assert(length(adjlist) == N)
+function FactorGraphIsing(net::Network; T=1)
+    @assert has_eprop(net, "J")
+    @assert has_vprop(net, "H")
+
+    adjlist = adjacency_list(net)
+    N = nv(net)
     vnodes = [VarIsing() for i=1:N]
-    J = [Vector{T}() for i=1:N]
+    J = [[eprop(net, e)["J"] / T for e in edges(net, i)] for i=1:N]
 
     for (i, v) in enumerate(vnodes)
-        @assert(length(adjlist[i]) == k)
+        v.H = vprop(net, i)["H"] / T
         resize!(v.uin, length(adjlist[i]))
         resize!(v.uout, length(adjlist[i]))
         resize!(v.tJ, length(adjlist[i]))
@@ -51,34 +50,13 @@ function FactorGraphIsingRRG(N::Int, k::Int, seed_graph::Int = -1)
             v.uin[ki] = 0
             kj = findfirst(==(i), adjlist[j])
             vnodes[j].uout[kj] = getref(v.uin, ki)
-            v.tJ[ki] = 0
-            J[i][ki] = 0
+            v.tJ[ki] = tanh(J[i][ki])
         end
     end
 
     mags = mag.(vnodes)
 
     FactorGraphIsing(N, vnodes, adjlist, J, mags)
-end
-
-function initrandJ!(g::FactorGraphIsing; μ=0, σ=1)
-    for (i,v) in enumerate(g.vnodes)
-        for (ki, j) in enumerate(g.adjlist[i])
-            (i > j) && continue
-            r = μ + σ * randn()
-            g.J[i][ki] = r
-            g.vnodes[i].tJ[ki] = tanh(r)
-            kj = findfirst(==(i), g.adjlist[j])
-            g.vnodes[j].tJ[kj] = g.vnodes[i].tJ[ki]
-            g.J[j][kj] = g.J[i][ki]
-        end
-    end
-end
-
-function initrandH!(g::FactorGraphIsing; μ=0, σ=1)
-    for v in g.vnodes
-        v.H = μ + σ * randn()
-    end
 end
 
 function initrandMess!(g::FactorGraphIsing; μ=0, σ=1)
@@ -141,79 +119,19 @@ end
 corr_disc_nn(g::FactorGraphIsing,i::Int,j::Int) = corr_conn_nn(g,i,j) + mag(g.vnodes[i])*mag(g.vnodes[j])
 
 function corr_disc_nn(g::FactorGraphIsing)
-    corrs = Vector{Vector{Float64}}(g.N)
+    corrs = [zeros(length(g.adjlist[i])) for i=1:g.N]
+    
     for i=1:g.N
-        corrs[i] = zeros(length(g.adjlist[i]))
-    end
-
-    for i=1:g.N
-        for (ki,j) in enumerate(g.adjlist[i])
-            corrs[i][ki] = corr_disc_nn(g,i,j)
+        for (ki, j) in enumerate(g.adjlist[i])
+            corrs[i][ki] = corr_disc_nn(g, i, j)
         end
     end
-    corrs
+    return corrs
 end
 
-function setH!(g::FactorGraphIsing, H::Vector)
-    @assert(g.N == length(H))
-    for (i,v) in enumerate(g.vnodes)
-        v.H = H[i]
-    end
-end
-
-function setH!(g::FactorGraphIsing, H::Float64)
-    for v in g.vnodes
-        v.H = H
-    end
-end
-
-function setMess!(g::FactorGraphIsing, H::Vector)
-    @assert(g.N == length(H))
-    for (i,v) in enumerate(g.vnodes)
-        for k=1:deg(v)
-            v.uin[k] = H[i]
-        end
-    end
-end
-
-function setJ!(g::FactorGraphIsing, J::Vector{Vector})
-    @assert(g.N == length(J))
-    for (i,v) in enumerate(g.vnodes)
-        @assert(deg(v) == length(J[i]))
-        for k=1:deg(v)
-            v.tJ[k] = tanh(J[i][k])
-            g.J[i][k] = J[i][k]
-        end
-    end
-end
-
-function setJ!(g::FactorGraphIsing, i::Int, j::Int, J)
-    vi = g.vnodes[i]
-    vj = g.vnodes[j]
-    ki = findfirst(==(j), g.adjlist[i])
-    kj = findfirst(==(i), g.adjlist[j])
-    @assert(ki > 0)
-    @assert(kj > 0)
-    g.J[i][ki] = J
-    g.J[j][kj] = J
-    vi.tJ[ki] = tanh(J)
-    vj.tJ[kj] = vi.tJ[ki]
-end
-
-function getJ(g::FactorGraphIsing, i::Int, j::Int)
-    ki = findfirst(==(j), g.adjlist[i])
-    g.J[i][ki]
-end
-
-function main_ising(; N::Int=1000, k::Int=4, 
-                    β = 1., 
-                    μJ=0, σJ=1,
-                    μH=0, σH=1,
-                    maxiters::Int=1000, ϵ=1e-6)
-    g = FactorGraphIsingRRG(N, k)
-    initrandJ!(g, μ=β*μJ, σ=β*σJ)
-    initrandH!(g, μ=β*μH, σ=β*σH)
+function run_bp(net::Network; maxiters::Int=1000, ϵ=1e-6, T=1)
+    g = FactorGraphIsing(net; T)
     initrandMess!(g, μ=0, σ=1)
-    converge!(g, maxiters=maxiters, ϵ=ϵ)
+    converge!(g; maxiters, ϵ)
     return g
 end
