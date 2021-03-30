@@ -1,6 +1,8 @@
 using BeliefPropagation
 using Test
 using Random, Statistics
+using Erdos
+using RRRMC
 
 include("test_utils.jl")
 

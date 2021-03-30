@@ -14,17 +14,27 @@ using FileIO
 end
 
 @testset "bp on rrg" begin
-    T = 1
+    ## NO COUPLINGS
+    T = 3
     N, z = 100, 4
+    Random.seed!(17)
     net = random_regular_graph(N, z, Network)
-    eprop!(net, "J", EdgeMap(net, e -> 1))
-    vprop!(net, "H", VertexMap(net, v -> 1 + randn()))
+    eprop!(net, "J", e -> 0)
+    vprop!(net, "H", v -> randn())
     fg = Ising.run_bp(net, T=T)
 
-    X = rrg_to_mcgraph(net)
-    Es, C, Cs = run_monte_carlo(X, β=1/T, infotime=100, sweeps=10^6);
-    Cs = Cs[length(Cs)÷2:end] # consider half as burn-in
-    mc_mags = 1 .- 2 .* reduce(+, Cs) / length(Cs)
-    Δ = mean(abs, fg.mags .- mc_mags)
-    @test Δ <= 0.02
+    @test fg.mags ≈ tanh.(vprop(net, "H").data ./ T)
+
+    ## NO FIELDS, J=1
+    T = 2
+    N, z = 100, 4
+    net = random_regular_graph(N, z, Network)
+    eprop!(net, "J", e -> 1)
+    vprop!(net, "H", v -> 0)
+    fg = Ising.run_bp(net, T=T)
+
+    # X = rrg_to_mcgraph(net)
+    # Es, σ, mc_mags = run_monte_carlo(X, β=1/T, infotime=10, sweeps=10^7);
+    # Δ = mean(abs, fg.mags .- mc_mags)
+    # @test Δ <= 0.01
 end
