@@ -1,5 +1,3 @@
-import OnlineStats
-
 function rrg_to_mcgraph(g::Network)
     # For some weird reason RRRMC stores 
     #couplings and fields with opposite sign.
@@ -86,7 +84,6 @@ function run_monte_carlo(X::RRRMC.Interface.AbstractGraph;
     hook, cleanup, μ = gen_hook(alg, seed)
     @time Es, Clast = runMC(X, β, iters, step=step, seed=seed, hook=hook)
     cleanup()
-    # filesave && save(gen_Cfname(alg, seedx, seed), Dict("Chistory"=>Chistory))
     σlast = 2 .* Clast.s .- 1
     μ = OnlineStats.value.(μ) 
     return Es, σlast, μ  #, Chistory

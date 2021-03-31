@@ -1,5 +1,3 @@
-using RRRMC
-using FileIO
 
 @testset "bp on erdos_renyi" begin
     Random.seed!(16)
