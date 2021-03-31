@@ -61,3 +61,15 @@ The algorithm is guaranteed to return exact solutions only on bipartite graphs
 - [SAT.jl](https://github.com/CarloLucibello/SAT.jl): a BP solver for SAT problems.
 - [ForneyLab.jl](https://github.com/biaslab/ForneyLab.jl): Bayesian inference algorithms through message passing on Forney-style factor graphs.
 - [BinaryCommitteeMachineFBP.jl](BinaryCommitteeMachineFBP.jl): Focusing Belief Propagation on commitee machines (neural network with one-hidden layer and a single output) with binary weights.
+
+## TODO
+
+Problems to implement:
+
+- (perfect) b-matching
+- coloring
+- xorsat
+- Potts models
+- Steiner tree
+
+Also, computation of Bethe free energy is missing.
