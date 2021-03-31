@@ -1,5 +1,8 @@
 # BeliefPropagation.jl
 
+![CI](https://github.com/CarloLucibello/BeliefPropagation.jl/workflows/CI/badge.svg)
+[![codecov](https://codecov.io/gh/CarloLucibello/BeliefPropagation.jl/branch/master/graph/badge.svg?token=EWNYPD7ASX)](https://codecov.io/gh/CarloLucibello/BeliefPropagation.jl)
+
 Implementation of Belief Propagation (BP) message passing for:
 
 - Ising model (`Ising` module)
@@ -8,14 +11,12 @@ Implementation of Belief Propagation (BP) message passing for:
 ## Installation
 
 ```julia
-]add 
-https://github.com/CarloLucibello/BeliefPropagation.jl
+]add https://github.com/CarloLucibello/BeliefPropagation.jl
 ```
 
 ## Usage
 
-Problem instances can be created using [Erdos](
-https://github.com/CarloLucibello/Erdos.jl) graph library. Problems are passed to the BP methods as Network objects, with features attached to edges and vertices.
+Problem instances can be created using [Erdos](https://github.com/CarloLucibello/Erdos.jl) graph library. Problems are passed to  BP methods as Network objects with features attached to edges and vertices.
 
 ### Ising
 
@@ -48,6 +49,9 @@ eprop!(net, "w", e -> rand())
 ## Run Belief Propagation and obtain optimal cost and matching
 E, match = Matching.run_bp(net, maxiters=100);
 ```
+
+The algorithm is guaranteed to return exact solution only on bipartite graphs
+(altough it may also work on non-bipartite).
 
 ## Related Packages
 
