@@ -3,6 +3,7 @@ using Test
 using Random, Statistics
 using Erdos
 using RRRMC
+import OnlineStats
 
 include("test_utils.jl")
 
