@@ -1,223 +1,129 @@
-using ExtractMacro
-using Printf
-
-const MessU = Float64  # ̂ν(a→i) = P(σ_i != J_ai)
-const MessH = Float64 #  ν(i→a) = P(σ_i != J_ai)
-
+const MessU = Float64  
 const PU = Ptr{MessU}
-const PH = Ptr{MessH}
-
 const VU = Vector{MessU}
-const VH = Vector{MessH}
 const VRU = Vector{PU}
-const VRH = Vector{PH}
 
 mutable struct Fact
-    h::VH
-    u::VRU
+    uin::VU
+    uout::VRU
     neigs::Vector{Int}
+    w::Vector{Float64}
 end
 
-Fact() = Fact(VH(), VRU(), Int[])
+Fact() = Fact(VU(), VRU(), Int[], Float64[])
 
-mutable struct Var
-    E::Float64
-    u::VU
-    h::VRH
-    htot::MessH
-    neigs::Vector{Int}
-end
+deg(f::Fact) = length(f.uin)
 
-Var() = Var(0., VU(), VRH(), MessH(0), Int[])
-
-
-"""
-Multi-index matching on d-partite hypergraph with
-N*d nodes and N*γ hyperedges (factors and variables respectively)
-"""
 mutable struct FactorGraph
     N::Int
-    d::Int
     γ::Float64
-    β::Float64
     fnodes::Vector{Fact}
-    vnodes::Vector{Var}
+    adjlist::Vector{Vector{Int}}
+end
 
-    function FactorGraph(N::Int, d::Int, γ::Float64; β=Inf, ismonopartite=false)
-        nf = N*d
-        nv = round(Int, N * 2γ)
-        # nv = N^d
-        fnodes = [Fact() for i=1:nf]
-        vnodes = [Var() for i=1:nv]
-        fit = rand(nf) # case 1
-        dims = tuple([N for _=1:d]...)
-        for (i, v) in enumerate(vnodes)
-            # v.E = 1. # case 1
-            v.E = rand()*(2γ) # case 2
-            # v.E = rand()*N^(d-1)
-            # idx = ind2sub(dims, i)
-            for l=1:d
-                # a = N*(l-1) + idx[l]
-                if ismonopartite
-                    a = rand(1:(d*N))
-                else
-                    a = N*(l-1) + rand(1:N)
-                end
-                f = fnodes[a]
-                push!(f.neigs, i)
-                push!(v.neigs, a)
-                # v.E *= fit[a] # case 1
-            end
-            # v.E *= 2γ # case 1
-        end
+function FactorGraph(net::Network; γ=Inf)
+    @assert has_eprop(net, "w")
 
-        ## ATTENTION: Reserve memory in order to avoid invalidation of Refs
-        ## The degree of each node has to be exactly known
-        for (a,f) in enumerate(fnodes)
-            sizehint!(f.u, length(f.neigs))
-            sizehint!(f.h, length(f.neigs))
-        end
-        for (i,v) in enumerate(vnodes)
-            sizehint!(v.u, d)
-            sizehint!(v.h, d)
-        end
+    N = nv(net)
+    fnodes = [Fact() for i=1:N]
 
-        for (i, v) in enumerate(vnodes)
-            # idx = ind2sub(dims, i)
-            for l=1:d
-                a = v.neigs[l]
-                # a = N*(l-1) + idx[l]
-                f = fnodes[a]
-                push!(v.u, MessU(0))
-                push!(f.u, getref(v.u, length(v.u)))
-
-                push!(f.h, MessH(0))
-                push!(v.h, getref(f.h, length(f.h)))
+    # Prune Graph
+    w = [Float64[] for i=1:N]
+    adjlist = [Int[] for i=1:N]
+    for i=1:N
+        for e in edges(net, i)
+            wij = eprop(net, e)["w"]
+            if wij < γ
+                push!(w[i], wij)
+                push!(adjlist[i], dst(e))
             end
         end
-        new(N, d, γ, β, fnodes, vnodes)
     end
-end
 
-mutable struct ReinfParams
-    r::Float64
-    rstep::Float64
-    wait_count::Int
-    ReinfParams(r=0.,rstep=0) = new(r, rstep, 0)
-end
+    for (i, v) in enumerate(fnodes)
+        resize!(v.uin, length(adjlist[i]))
+        resize!(v.uout, length(adjlist[i]))
+        resize!(v.w, length(adjlist[i]))
+    end
 
-deg(f::Fact) = length(f.u)
-deg(v::Var) = length(v.h)
+    for (i, f) in enumerate(fnodes)
+        for (ki, j) in enumerate(adjlist[i])
+            f.uin[ki] = 0
+            kj = findfirst(==(i), adjlist[j])
+            fnodes[j].uout[kj] = getref(f.uin, ki)
+            f.w[ki] = w[i][ki]
+        end
+    end
+
+    FactorGraph(N, γ, fnodes, adjlist)
+end
 
 function initrand!(g::FactorGraph)
     for f in g.fnodes
         for k=1:deg(f)
-            f.h[k] = rand()
-        end
-    end
-    for v in g.vnodes
-        for k=1:deg(v)
-            v.u[k] = rand()
+            f.uin[k] = randn()
         end
     end
 end
 
-function update!(f::Fact, γ, β = Inf)
-    @extract f u h
-    # m1 = m2 = γ
-    if β == Inf
-        m1 = m2 = γ
-        i1 = 0
-        for i=1:deg(f)
-            if h[i] < m1
-                m2 = m1
-                m1 = h[i]
-                i1 = i
-            elseif h[i] < m2
-                m2 = h[i]
-            end
+function update!(f::Fact)
+    @extract f: w uin uout
+    m1 = m2 = Inf
+    i1 = 0
+    for i=1:deg(f)
+        h = w[i] - uin[i]
+        if h < m1
+            m2 = m1
+            m1 = h
+            i1 = i
+        elseif h < m2
+            m2 = h
         end
-        @assert i1 != 0
-        @assert isfinite(m1)
-        @assert isfinite(m2)
-        for i=1:deg(f)
-            u[i][] = m1
-        end
-        u[i1][] = m2
-    else # β != Inf
-        #TODO
     end
+
+    for i=1:deg(f)
+        uout[i][] = m1
+    end
+    Δ = abs(uout[i1][] - m2)
+    uout[i1][] = m2
+    return Δ
 end
 
+function findmatch(f::Fact)
+    @extract f: w uin
+    m1 = Inf
+    i1 = 0
+    for i=1:deg(f)
+        h = w[i] - uin[i]
+        if h < m1
+            m1 = h
+            i1 = i
+        end
+    end
+    return i1, w[i1]
+end
 
-function update!(v::Var, r::Float64 = 0.)
-    @extract v: u h
+function oneBPiter!(g::FactorGraph)
     Δ = 0.
-    ### compute cavity fields
-    htot = v.E
-    for i=1:deg(v)
-        htot -= u[i]
-    end
-
-    for i=1:deg(v)
-        hold = h[i][]
-        h[i][] = htot + u[i]
-        Δ = max(Δ, abs(hold - h[i][]))
-    end
-    # Δ = max(Δ, abs(v.htot - htot))
-    v.htot = htot
-
-    Δ
-end
-
-function oneBPiter!(g::FactorGraph, r::Float64=0.)
-    @extract g: fnodes vnodes N
-    Δ = 0.
-    nv = length(vnodes);
-    nf = length(fnodes);
-
-    for a=1:nf
-        update!(g.fnodes[a], g.γ)
-    end
-    for i=1:nv
-        d = update!(g.vnodes[i], r)
+    for a in randperm(g.N)
+        d = update!(g.fnodes[a])
         Δ = max(Δ, d)
     end
-
-    # for _=1:(nv+nf)
-    #     n = rand(1:(nv+nf))
-    #     if n <= nv
-    #         d = update!(g.vnodes[n], r)
-    #         Δ = max(Δ, d)
-    #     else
-    #         update!(g.fnodes[n-nv], g.γ)
-    #     end
-    # end
-
-    Δ
+    return Δ
 end
 
-function update_reinforcement!(reinfpar::ReinfParams)
-    if reinfpar.wait_count < 10
-        reinfpar.wait_count += 1
-    else
-        reinfpar.r *= 1 + reinfpar.rstep
-    end
-end
-
-function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5
-        , reinfpar::ReinfParams=ReinfParams())
+function converge!(g::FactorGraph; maxiters=100, ϵ=1e-8)
 
     Eold = 0.
     tstop = 0
+    
     for it=1:maxiters
         print("it=$it ... ")
-        Δ = oneBPiter!(g, reinfpar.r)
+        Δ = oneBPiter!(g)
         E, matchmap, nfails = energy(g)
-        @printf("r=%.3f E=%.5f  nfails=%d \tΔ=%f \n", reinfpar.r, E, nfails, Δ)
-        update_reinforcement!(reinfpar)
-
-        if abs(Eold-E) < ϵ && nfails == 0
+        @printf("E=%.5f  nfails=%d \tΔ=%f \n", E, nfails, Δ)
+        
+        if abs(Eold - E) < ϵ && nfails == 0
             tstop += 1
             if tstop == 10
                 println("Found ground state")
@@ -229,56 +135,43 @@ function converge!(g::FactorGraph; maxiters::Int = 100, ϵ::Float64=1e-5
 
         Eold = E
     end
+    return Eold
 end
 
 function energy(g::FactorGraph)
-    #TODO estendere al multi-index
-    @extract g: fnodes vnodes N
+    @extract g: fnodes N adjlist
     E = 0.
-    matchmap = zeros(Int, 2N) #only for d=2
-    matchcount = zeros(Int, 2N)
-    for a=1:2N
-        f = fnodes[a]
-        i1 = 0
-        m1 = 10000.
-        for i=1:deg(f)
-            if f.h[i] < m1
-                m1 = f.h[i]
-                i1 = i
-            end
-        end
-        @assert i1 > 0
-        v = vnodes[f.neigs[i1]]
-        E += v.E
-        neig = a == v.neigs[1] ? v.neigs[2] : v.neigs[1]
-        matchmap[a] = neig
-        matchcount[neig] += 1
+    matchmap = zeros(Int, N) 
+    for i=1:N
+        f = fnodes[i]
+        k, wij = findmatch(f)
+        E += wij
+        matchmap[i] = adjlist[i][k]
     end
+    E /= 2
     nfails = 0
-    for i=1:2N
-        nfails += matchcount[i] == 1 ? 0 : 1
+    for i=1:N
+        j = matchmap[i]
+        nfails += matchmap[j] != i
     end
-    # println("nv=$(nv/N) E=$(E/N)")
-    return E / (2N), matchmap, nfails
+    return E, matchmap, nfails
 end
 
 """
-Return the optimal cost density and the matching map:
+Return the optimal cost and the matching map:
 `matchmap[i] = j`  if (i,j) is in the optimal matching.
 
-The cutoff on the costs is  2γ.
-
-BP on the multi-index matching diverges witouth giving meaningful results
+The cutoff on the costs is  γ.
 """
-function solve(;N=200, d=2, γ=40.,
-                maxiters::Int = 10000, ϵ::Float64 = 1e-4,
-                r::Float64 = 0., rstep::Float64= 0.00,
-                seed::Int = -1, ismonopartite=false)
+function run_bp(net::Network; 
+                γ = Inf,
+                maxiters = 10000, 
+                ϵ = 1e-4,
+                seed = -1)
     seed > 0 && Random.seed!(seed)
-    g = FactorGraph(N, d, γ, ismonopartite=ismonopartite)
+    g = FactorGraph(net; γ)
     initrand!(g)
-    reinfpar = ReinfParams(r, rstep)
-    converge!(g, maxiters=maxiters, ϵ=ϵ, reinfpar=reinfpar)
+    converge!(g; maxiters, ϵ)
     E, matchmap, nfails = energy(g)
-    return E, matchmap
+    return E, matchmap, g, nfails
 end

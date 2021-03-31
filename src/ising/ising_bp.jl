@@ -1,4 +1,3 @@
-const T = Float64  
 
 mutable struct VarIsing
     uin::Vector{T}
@@ -17,14 +16,10 @@ function Base.show(io::IO, v::VarIsing)
     print(io, "VarIsing(deg=$(deg(v)), H=$(v.H))")
 end
 
-
-abstract type FactorGraph end
-
 mutable struct FactorGraphIsing <: FactorGraph
     N::Int
     vnodes::Vector{VarIsing}
     adjlist::Vector{Vector{Int}}
-    J::Vector{Vector{T}}
     mags::Vector{T}
 end
 
@@ -42,7 +37,6 @@ function FactorGraphIsing(net::Network; T=1)
         resize!(v.uin, length(adjlist[i]))
         resize!(v.uout, length(adjlist[i]))
         resize!(v.tJ, length(adjlist[i]))
-        resize!(J[i], length(adjlist[i]))
     end
 
     for (i, v) in enumerate(vnodes)
@@ -56,10 +50,10 @@ function FactorGraphIsing(net::Network; T=1)
 
     mags = mag.(vnodes)
 
-    FactorGraphIsing(N, vnodes, adjlist, J, mags)
+    FactorGraphIsing(N, vnodes, adjlist, mags)
 end
 
-function initrandMess!(g::FactorGraphIsing; μ=0, σ=1)
+function initrand!(g::FactorGraphIsing; μ=0, σ=1)
     for v in g.vnodes
         for k=1:deg(v)
             v.uin[k] = μ + σ * randn()
@@ -129,9 +123,9 @@ function corr_disc_nn(g::FactorGraphIsing)
     return corrs
 end
 
-function run_bp(net::Network; maxiters::Int=1000, ϵ=1e-6, T=1)
+function run_bp(net::Network; maxiters=1000, ϵ=1e-6, T=1)
     g = FactorGraphIsing(net; T)
-    initrandMess!(g, μ=0, σ=1)
+    initrand!(g, μ=0, σ=1)
     converge!(g; maxiters, ϵ)
     return g
 end
