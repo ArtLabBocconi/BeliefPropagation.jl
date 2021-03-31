@@ -5,8 +5,8 @@ using FileIO
     Random.seed!(16)
     N, c = 100, 4
     net = erdos_renyi(N, c / N, Network)
-    eprop!(net, "J", EdgeMap(net, e -> randn()))
-    vprop!(net, "H", VertexMap(net, v -> 1 + randn()))
+    eprop!(net, "J", e -> randn())
+    vprop!(net, "H", v -> 1 + randn())
     fg = Ising.run_bp(net, T=2)
 
     @test mean(fg.mags) > 0.1

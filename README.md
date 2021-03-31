@@ -26,8 +26,8 @@ using Erdos
 # Create Ising model on ErdosRenyi graph
 # with random couplings and constant external field.
 net = erdos_renyi(100, 0.02, Network)
-eprop!(net, "J", EdgeMap(net, e -> randn()))
-vprop!(net, "H", VertexMap(net, v -> 1))
+eprop!(net, "J", e -> randn())
+vprop!(net, "H", v -> 1)
 
 ## Run Belief Propagation at some temperature
 ### and extract magnetizations
@@ -43,7 +43,7 @@ using Erdos
 
 # Create an instance of the random assignment problem
 net = CompleteBipartiteGraph(100, 100, Network)
-eprop!(net, "w", EdgeMap(net, e -> rand()))
+eprop!(net, "w", e -> rand())
 
 ## Run Belief Propagation and obtain optimal cost and matching
 E, match = Matching.run_bp(net, maxiters=100);
