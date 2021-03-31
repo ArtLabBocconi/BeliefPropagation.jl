@@ -50,7 +50,7 @@ eprop!(net, "w", e -> rand())
 E, match = Matching.run_bp(net, maxiters=100);
 ```
 
-The algorithm is guaranteed to return exact solution only on bipartite graphs
+The algorithm is guaranteed to return exact solutions only on bipartite graphs
 (altough it may also work on non-bipartite).
 
 ## Related Packages
