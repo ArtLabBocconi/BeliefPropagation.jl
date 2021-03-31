@@ -1,21 +1,25 @@
 # BeliefPropagation.jl
 
+![CI](https://github.com/CarloLucibello/BeliefPropagation.jl/workflows/CI/badge.svg)
+[![codecov](https://codecov.io/gh/CarloLucibello/BeliefPropagation.jl/branch/master/graph/badge.svg?token=EWNYPD7ASX)](https://codecov.io/gh/CarloLucibello/BeliefPropagation.jl)
+
 Implementation of Belief Propagation (BP) message passing for:
 
 - Ising model (`Ising` module)
 - Minimum weight perfect matching (`Matching` module)
 
+Package is still experimental and not thoroughly tested, use it at your own risk.
+Code contributions are very welcome!
+
 ## Installation
 
 ```julia
-]add 
-https://github.com/CarloLucibello/BeliefPropagation.jl
+]add https://github.com/CarloLucibello/BeliefPropagation.jl
 ```
 
 ## Usage
 
-Problem instances can be created using [Erdos](
-https://github.com/CarloLucibello/Erdos.jl) graph library. Problems are passed to the BP methods as Network objects, with features attached to edges and vertices.
+Problem instances can be created using [Erdos](https://github.com/CarloLucibello/Erdos.jl) graph library. Problems are passed to  BP methods as Network objects with features attached to edges and vertices.
 
 ### Ising
 
@@ -49,8 +53,11 @@ eprop!(net, "w", e -> rand())
 E, match = Matching.run_bp(net, maxiters=100);
 ```
 
+The algorithm is guaranteed to return exact solutions only on bipartite graphs
+(altough it may also work on non-bipartite).
+
 ## Related Packages
 
 - [SAT.jl](https://github.com/CarloLucibello/SAT.jl): a BP solver for SAT problems.
 - [ForneyLab.jl](https://github.com/biaslab/ForneyLab.jl): Bayesian inference algorithms through message passing on Forney-style factor graphs.
-- [BinaryCommitteeMachineFBP.jl](BinaryCommitteeMachineFBP.jl): Focusing Belief Propagation on Commitee machines with binary weights.
+- [BinaryCommitteeMachineFBP.jl](BinaryCommitteeMachineFBP.jl): Focusing Belief Propagation on commitee machines (neural network with one-hidden layer and a single output) with binary weights.
