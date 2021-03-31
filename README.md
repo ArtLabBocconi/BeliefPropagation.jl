@@ -8,6 +8,9 @@ Implementation of Belief Propagation (BP) message passing for:
 - Ising model (`Ising` module)
 - Minimum weight perfect matching (`Matching` module)
 
+Package is still experimental and not thoroughly tested, use it at your own risk.
+Code contributions are very welcome!
+
 ## Installation
 
 ```julia
@@ -57,4 +60,4 @@ The algorithm is guaranteed to return exact solutions only on bipartite graphs
 
 - [SAT.jl](https://github.com/CarloLucibello/SAT.jl): a BP solver for SAT problems.
 - [ForneyLab.jl](https://github.com/biaslab/ForneyLab.jl): Bayesian inference algorithms through message passing on Forney-style factor graphs.
-- [BinaryCommitteeMachineFBP.jl](BinaryCommitteeMachineFBP.jl): Focusing Belief Propagation on Commitee machines with binary weights.
+- [BinaryCommitteeMachineFBP.jl](BinaryCommitteeMachineFBP.jl): Focusing Belief Propagation on commitee machines (neural network with one-hidden layer and a single output) with binary weights.
