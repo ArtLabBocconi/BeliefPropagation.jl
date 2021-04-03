@@ -36,3 +36,14 @@ end
     # Δ = mean(abs, fg.mags .- mc_mags)
     # @test Δ <= 0.01
 end
+
+# 2D lattice
+
+Tc = 2 / log(1+√2) #2.269185314213022 from Onsager's solution
+T = 2
+L = 16
+net = Grid([L, L], Network, periodic=true)
+eprop!(net, "J", e -> 1)
+vprop!(net, "H", v -> 0)
+fg = Ising.run_bp(net, T=T)
+

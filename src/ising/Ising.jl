@@ -8,7 +8,6 @@ using Printf
 export run_bp
 
 abstract type FactorGraph end
-const T = Float64  
 
 getref(v::Vector, i::Integer) = pointer(v, i)
 

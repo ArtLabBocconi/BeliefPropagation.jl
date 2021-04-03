@@ -3,8 +3,8 @@ mutable struct TAPGraphIsing{TJ, TH}
     adjlist::Vector{Vector{Int}}
     J::Vector{Vector{TH}}
     H::Vector{TJ}
-    m::Vector{T}
-    m_old::Vector{T}
+    m::Vector{Float64}
+    m_old::Vector{Float64}
 end
 
 mag(g::TAPGraphIsing, i::Integer) = g.m[i]

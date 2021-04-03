@@ -4,6 +4,7 @@
 *.jld
 *.dat
 *.txt
+*.graphml
 Manifest.toml
 pf_committee/
 res_parisifranz
