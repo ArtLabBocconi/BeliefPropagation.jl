@@ -7,6 +7,7 @@ Implementation of Belief Propagation (BP) message passing for:
 
 - Ising model (`Ising` module)
 - Minimum weight perfect matching (`Matching` module)
+- Minimum weight perfect b-matching (`BMatching` module)
 
 Package is still experimental and not thoroughly tested, use it at your own risk.
 Code contributions are very welcome!
@@ -84,11 +85,11 @@ E, match = BMatching.run_bp(net, maxiters=100);
 
 ## TODO
 
-Problems to implement:
+Problems to be implemented:
 
 - coloring
 - xorsat
 - Potts models
 - Steiner tree
 
-Also, computation of Bethe free energy is missing.
+Computation of Bethe free energies is also missing.
