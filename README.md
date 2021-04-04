@@ -14,7 +14,7 @@ Code contributions are very welcome!
 ## Installation
 
 ```julia
-]add https://github.com/CarloLucibello/BeliefPropagation.jl
+]add https://github.com/ArtLabBocconi/BeliefPropagation.jl
 ```
 
 ## Usage
