@@ -1,16 +1,11 @@
-const MessU = Float64  
-const PU = Ptr{MessU}
-const VU = Vector{MessU}
-const VRU = Vector{PU}
-
 mutable struct Fact
-    uin::VU
-    uout::VRU
+    uin::Vector{Float64}
+    uout::Vector{Ptr{Float64}}
     neigs::Vector{Int}
     w::Vector{Float64}
 end
 
-Fact() = Fact(VU(), VRU(), Int[], Float64[])
+Fact() = Fact(Float64[], Ptr{Float64}[], Int[], Float64[])
 
 deg(f::Fact) = length(f.uin)
 
@@ -112,21 +107,20 @@ function oneBPiter!(g::FactorGraph)
     return Δ
 end
 
-function converge!(g::FactorGraph; maxiters=100, ϵ=1e-8)
+function converge!(g::FactorGraph; maxiters=100, ϵ=1e-8, verbose=true)
 
     Eold = 0.
     tstop = 0
     
     for it=1:maxiters
-        print("it=$it ... ")
         Δ = oneBPiter!(g)
         E, matchmap, nfails = energy(g)
-        @printf("E=%.5f  nfails=%d \tΔ=%f \n", E, nfails, Δ)
+        verbose && @printf("it=%d  E=%.5f  nfails=%d \tΔ=%f \n", it, E, nfails, Δ)
         
         if abs(Eold - E) < ϵ && nfails == 0
             tstop += 1
             if tstop == 10
-                println("Found ground state")
+                verbose && println("Found ground state")
                 break
             end
         else
@@ -167,11 +161,12 @@ function run_bp(net::Network;
                 γ = Inf,
                 maxiters = 10000, 
                 ϵ = 1e-4,
-                seed = -1)
+                seed = -1,
+                verbose=true)
     seed > 0 && Random.seed!(seed)
     g = FactorGraph(net; γ)
     initrand!(g)
-    converge!(g; maxiters, ϵ)
+    converge!(g; maxiters, ϵ, verbose)
     E, matchmap, nfails = energy(g)
     return E, matchmap, g, nfails
 end

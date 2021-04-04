@@ -1,17 +1,12 @@
-const MessU = Float64  
-const PU = Ptr{MessU}
-const VU = Vector{MessU}
-const VRU = Vector{PU}
-
 mutable struct Fact
-    uin::VU
-    uout::VRU
+    uin::Vector{Float64}
+    uout::Vector{Ptr{Float64}}
     neigs::Vector{Int}
     w::Vector{Float64}
     b::Int
 end
 
-Fact() = Fact(VU(), VRU(), Int[], Float64[], 1)
+Fact() = Fact(Float64[], Ptr{Float64}[], Int[], Float64[], 1)
 
 deg(f::Fact) = length(f.uin)
 
@@ -85,9 +80,9 @@ end
 function update!(f::Fact)
     @extract f: w uin uout b
     h = w .- uin
-    is = topk(x, b+1)
-    m1 = is[b]
-    m2 = is[b+1]
+    is = topk(h, b+1, rev=true)
+    m1 = h[is[b]]
+    m2 = h[is[b+1]]
     for i=1:deg(f)
         uout[i][] = m1
     end
@@ -99,17 +94,10 @@ function update!(f::Fact)
 end
 
 function findmatch(f::Fact)
-    @extract f: w uin
-    m1 = Inf
-    i1 = 0
-    for i=1:deg(f)
-        h = w[i] - uin[i]
-        if h < m1
-            m1 = h
-            i1 = i
-        end
-    end
-    return i1, w[i1]
+    @extract f: w uin b
+    h = w .- uin
+    is = topk(h, b, rev=true)    
+    return is, sum(w[is])
 end
 
 function oneBPiter!(g::FactorGraph)
@@ -121,21 +109,20 @@ function oneBPiter!(g::FactorGraph)
     return Δ
 end
 
-function converge!(g::FactorGraph; maxiters=100, ϵ=1e-8)
+function converge!(g::FactorGraph; maxiters=100, ϵ=1e-8, verbose=true)
 
     Eold = 0.
     tstop = 0
     
     for it=1:maxiters
-        print("it=$it ... ")
         Δ = oneBPiter!(g)
         E, matchmap, nfails = energy(g)
-        @printf("E=%.5f  nfails=%d \tΔ=%f \n", E, nfails, Δ)
+        verbose && @printf("it=%d  E=%.5f  nfails=%d \tΔ=%f \n", it, E, nfails, Δ)
         
         if abs(Eold - E) < ϵ && nfails == 0
             tstop += 1
             if tstop == 10
-                println("Found ground state")
+                verbose && println("Found ground state")
                 break
             end
         else
@@ -150,18 +137,19 @@ end
 function energy(g::FactorGraph)
     @extract g: fnodes N adjlist
     E = 0.
-    matchmap = zeros(Int, N) 
+    matchmap = Vector{Vector{Int}}(undef, N) 
     for i=1:N
         f = fnodes[i]
-        k, wij = findmatch(f)
-        E += wij
-        matchmap[i] = adjlist[i][k]
+        ks, sumw = findmatch(f)
+        E += sumw
+        matchmap[i] = adjlist[i][ks]
     end
     E /= 2
     nfails = 0
     for i=1:N
-        j = matchmap[i]
-        nfails += matchmap[j] != i
+        for j in matchmap[i]
+            nfails += i ∉ matchmap[j]
+        end
     end
     return E, matchmap, nfails
 end
@@ -176,11 +164,12 @@ function run_bp(net::Network;
                 γ = Inf,
                 maxiters = 10000, 
                 ϵ = 1e-4,
-                seed = -1)
+                seed = -1, 
+                verbose=true)
     seed > 0 && Random.seed!(seed)
     g = FactorGraph(net; γ)
     initrand!(g)
-    converge!(g; maxiters, ϵ)
+    converge!(g; maxiters, ϵ, verbose)
     E, matchmap, nfails = energy(g)
     return E, matchmap, g, nfails
 end

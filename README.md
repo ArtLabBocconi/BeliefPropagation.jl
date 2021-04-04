@@ -87,6 +87,7 @@ E, match = BMatching.run_bp(net, maxiters=100);
 
 Problems to be implemented:
 
+- Low Density Parity Check codes (LDPC)
 - coloring
 - xorsat
 - Potts models
