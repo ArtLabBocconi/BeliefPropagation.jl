@@ -44,10 +44,12 @@ fg.mags
 ```julia
 using BeliefPropagation.Matching
 using Erdos 
+using LinearAlgebra
 
 # Create an instance of the random assignment problem
 net = CompleteBipartiteGraph(100, 100, Network)
-eprop!(net, "w", e -> rand())
+pos = [rand(2) for i in 1:nv(net)]
+eprop!(net, "w", e -> norm(pos[src(e)] .- pos[dst(e)]))
 
 ## Run Belief Propagation and obtain optimal cost and matching
 E, match = Matching.run_bp(net, maxiters=100);
@@ -55,6 +57,24 @@ E, match = Matching.run_bp(net, maxiters=100);
 
 The algorithm is guaranteed to return exact solutions only on bipartite graphs
 (altough it may also work on non-bipartite).
+
+### B-Matching
+
+Solve an instance of the minimum-weight perfect b-matching problem.
+
+```julia
+using BeliefPropagation.BMatching
+using Erdos 
+using LinearAlgebra
+
+# Create an instance of the random assignment problem
+net = CompleteGraph(100, Network)
+eprop!(net, "w", e -> rand())
+vprop!(net, "b", v -> rand(1:5))
+
+## Run Belief Propagation and obtain optimal cost and matching
+E, match = BMatching.run_bp(net, maxiters=100);
+```
 
 ## Related Packages
 
@@ -66,7 +86,6 @@ The algorithm is guaranteed to return exact solutions only on bipartite graphs
 
 Problems to implement:
 
-- (perfect) b-matching
 - coloring
 - xorsat
 - Potts models
