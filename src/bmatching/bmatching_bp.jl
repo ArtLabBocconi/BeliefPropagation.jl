@@ -83,10 +83,11 @@ function update!(f::Fact)
     is = topk(h, b+1, rev=true)
     m1 = h[is[b]]
     m2 = h[is[b+1]]
+    
+    Δ = abs(uout[is[b]][] - m2)
     for i=1:deg(f)
         uout[i][] = m1
     end
-    Δ = abs(uout[is[b]][] - m2)
     for i in is[1:b]
         uout[i][] = m2
     end

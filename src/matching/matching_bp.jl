@@ -76,10 +76,10 @@ function update!(f::Fact)
         end
     end
 
+    Δ = abs(uout[i1][] - m2)
     for i=1:deg(f)
         uout[i][] = m1
     end
-    Δ = abs(uout[i1][] - m2)
     uout[i1][] = m2
     return Δ
 end
