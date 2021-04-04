@@ -5,7 +5,7 @@
     net = erdos_renyi(N, c / N, Network)
     eprop!(net, "J", e -> randn())
     vprop!(net, "H", v -> 1 + randn())
-    fg = Ising.run_bp(net, T=2)
+    fg = Ising.run_bp(net, T=2, verbose=false)
 
     @test mean(fg.mags) > 0.1
     # writenetwork("rrg.gml", net)
@@ -19,7 +19,7 @@ end
     net = random_regular_graph(N, z, Network)
     eprop!(net, "J", e -> 0)
     vprop!(net, "H", v -> randn())
-    fg = Ising.run_bp(net, T=T)
+    fg = Ising.run_bp(net, T=T, verbose=false)
 
     @test fg.mags ≈ tanh.(vprop(net, "H").data ./ T)
 
@@ -29,7 +29,7 @@ end
     net = random_regular_graph(N, z, Network)
     eprop!(net, "J", e -> 1)
     vprop!(net, "H", v -> 0)
-    fg = Ising.run_bp(net, T=T)
+    fg = Ising.run_bp(net, T=T, verbose=false)
 
     # X = rrg_to_mcgraph(net)
     # Es, σ, mc_mags = run_monte_carlo(X, β=1/T, infotime=10, sweeps=10^7);
@@ -45,5 +45,5 @@ L = 16
 net = Grid([L, L], Network, periodic=true)
 eprop!(net, "J", e -> 1)
 vprop!(net, "H", v -> 0)
-fg = Ising.run_bp(net, T=T)
+fg = Ising.run_bp(net, T=T, verbose=false)
 

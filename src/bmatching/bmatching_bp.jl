@@ -3,9 +3,10 @@ mutable struct Fact
     uout::Vector{Ptr{Float64}}
     neigs::Vector{Int}
     w::Vector{Float64}
+    b::Int
 end
 
-Fact() = Fact(Float64[], Ptr{Float64}[], Int[], Float64[])
+Fact() = Fact(Float64[], Ptr{Float64}[], Int[], Float64[], 1)
 
 deg(f::Fact) = length(f.uin)
 
@@ -18,16 +19,19 @@ end
 
 function FactorGraph(net::Network; γ=Inf)
     @assert has_eprop(net, "w")
+    @assert has_vprop(net, "b")
 
     N = nv(net)
     fnodes = [Fact() for i=1:N]
+    wmap = eprop(net, "w")
+    bmap = vprop(net, "b")
 
     # Prune Graph
     w = [Float64[] for i=1:N]
     adjlist = [Int[] for i=1:N]
     for i=1:N
         for e in edges(net, i)
-            wij = eprop(net, e)["w"]
+            wij = wmap[e]
             if wij < γ
                 push!(w[i], wij)
                 push!(adjlist[i], dst(e))
@@ -35,13 +39,14 @@ function FactorGraph(net::Network; γ=Inf)
         end
     end
 
-    for (i, v) in enumerate(fnodes)
-        resize!(v.uin, length(adjlist[i]))
-        resize!(v.uout, length(adjlist[i]))
-        resize!(v.w, length(adjlist[i]))
+    for (i, f) in enumerate(fnodes)
+        resize!(f.uin, length(adjlist[i]))
+        resize!(f.uout, length(adjlist[i]))
+        resize!(f.w, length(adjlist[i]))
     end
 
     for (i, f) in enumerate(fnodes)
+        f.b = bmap[i]
         for (ki, j) in enumerate(adjlist[i])
             f.uin[ki] = 0
             kj = findfirst(==(i), adjlist[j])
@@ -61,41 +66,39 @@ function initrand!(g::FactorGraph)
     end
 end
 
-function update!(f::Fact)
-    @extract f: w uin uout
-    m1 = m2 = Inf
-    i1 = 0
-    for i=1:deg(f)
-        h = w[i] - uin[i]
-        if h < m1
-            m2 = m1
-            m1 = h
-            i1 = i
-        elseif h < m2
-            m2 = h
-        end
-    end
+"""
+    topk(x, k; rev=false)
 
-    Δ = abs(uout[i1][] - m2)
+Return the indexes of the largest `k` elements in `x`.
+If `rev=true`, return the smallest elements.
+"""
+function topk(x, k; rev=false)
+    is = partialsortperm(x, 1:k; rev=!rev)
+    return is # xs[is]
+end
+
+function update!(f::Fact)
+    @extract f: w uin uout b
+    h = w .- uin
+    is = topk(h, b+1, rev=true)
+    m1 = h[is[b]]
+    m2 = h[is[b+1]]
+    
+    Δ = abs(uout[is[b]][] - m2)
     for i=1:deg(f)
         uout[i][] = m1
     end
-    uout[i1][] = m2
+    for i in is[1:b]
+        uout[i][] = m2
+    end
     return Δ
 end
 
 function findmatch(f::Fact)
-    @extract f: w uin
-    m1 = Inf
-    i1 = 0
-    for i=1:deg(f)
-        h = w[i] - uin[i]
-        if h < m1
-            m1 = h
-            i1 = i
-        end
-    end
-    return i1, w[i1]
+    @extract f: w uin b
+    h = w .- uin
+    is = topk(h, b, rev=true)    
+    return is, sum(w[is])
 end
 
 function oneBPiter!(g::FactorGraph)
@@ -135,18 +138,19 @@ end
 function energy(g::FactorGraph)
     @extract g: fnodes N adjlist
     E = 0.
-    matchmap = zeros(Int, N) 
+    matchmap = Vector{Vector{Int}}(undef, N) 
     for i=1:N
         f = fnodes[i]
-        k, wij = findmatch(f)
-        E += wij
-        matchmap[i] = adjlist[i][k]
+        ks, sumw = findmatch(f)
+        E += sumw
+        matchmap[i] = adjlist[i][ks]
     end
     E /= 2
     nfails = 0
     for i=1:N
-        j = matchmap[i]
-        nfails += matchmap[j] != i
+        for j in matchmap[i]
+            nfails += i ∉ matchmap[j]
+        end
     end
     return E, matchmap, nfails
 end
@@ -161,7 +165,7 @@ function run_bp(net::Network;
                 γ = Inf,
                 maxiters = 10000, 
                 ϵ = 1e-4,
-                seed = -1,
+                seed = -1, 
                 verbose=true)
     seed > 0 && Random.seed!(seed)
     g = FactorGraph(net; γ)

@@ -7,6 +7,7 @@ Implementation of Belief Propagation (BP) message passing for:
 
 - Ising model (`Ising` module)
 - Minimum weight perfect matching (`Matching` module)
+- Minimum weight perfect b-matching (`BMatching` module)
 
 Package is still experimental and not thoroughly tested, use it at your own risk.
 Code contributions are very welcome!
@@ -44,10 +45,12 @@ fg.mags
 ```julia
 using BeliefPropagation.Matching
 using Erdos 
+using LinearAlgebra
 
 # Create an instance of the random assignment problem
 net = CompleteBipartiteGraph(100, 100, Network)
-eprop!(net, "w", e -> rand())
+pos = [rand(2) for i in 1:nv(net)]
+eprop!(net, "w", e -> norm(pos[src(e)] .- pos[dst(e)]))
 
 ## Run Belief Propagation and obtain optimal cost and matching
 E, match = Matching.run_bp(net, maxiters=100);
@@ -55,6 +58,24 @@ E, match = Matching.run_bp(net, maxiters=100);
 
 The algorithm is guaranteed to return exact solutions only on bipartite graphs
 (altough it may also work on non-bipartite).
+
+### B-Matching
+
+Solve an instance of the minimum-weight perfect b-matching problem.
+
+```julia
+using BeliefPropagation.BMatching
+using Erdos 
+using LinearAlgebra
+
+# Create an instance of the random assignment problem
+net = CompleteGraph(100, Network)
+eprop!(net, "w", e -> rand())
+vprop!(net, "b", v -> rand(1:5))
+
+## Run Belief Propagation and obtain optimal cost and matching
+E, match = BMatching.run_bp(net, maxiters=100);
+```
 
 ## Related Packages
 
@@ -64,12 +85,12 @@ The algorithm is guaranteed to return exact solutions only on bipartite graphs
 
 ## TODO
 
-Problems to implement:
+Problems to be implemented:
 
-- (perfect) b-matching
+- Low Density Parity Check codes (LDPC)
 - coloring
 - xorsat
 - Potts models
 - Steiner tree
 
-Also, computation of Bethe free energy is missing.
+Computation of Bethe free energies is also missing.
