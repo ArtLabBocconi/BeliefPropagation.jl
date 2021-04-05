@@ -1,7 +1,7 @@
 # BeliefPropagation.jl
 
-![CI](https://github.com/CarloLucibello/BeliefPropagation.jl/workflows/CI/badge.svg)
-[![codecov](https://codecov.io/gh/CarloLucibello/BeliefPropagation.jl/branch/master/graph/badge.svg?token=EWNYPD7ASX)](https://codecov.io/gh/CarloLucibello/BeliefPropagation.jl)
+![CI](https://github.com/ArtLabBocconi/BeliefPropagation.jl/workflows/CI/badge.svg)
+[![codecov](https://codecov.io/gh/ArtLabBocconi/BeliefPropagation.jl/branch/master/graph/badge.svg?token=EWNYPD7ASX)](https://codecov.io/gh/ArtLabBocconi/BeliefPropagation.jl)
 
 Implementation of Belief Propagation (BP) message passing for:
 
