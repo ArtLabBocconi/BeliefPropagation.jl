@@ -7,8 +7,6 @@ using Printf
 
 export run_bp
 
-abstract type FactorGraph end
-
 getref(v::Vector, i::Integer) = pointer(v, i)
 
 include("ising_bp.jl")
