@@ -7,6 +7,10 @@ import OnlineStats
 
 include("test_utils.jl")
 
+@testset "FactorGraph" begin
+    include("factor_graph.jl")
+end
+
 @testset "Matching" begin
     include("matching.jl")
 end

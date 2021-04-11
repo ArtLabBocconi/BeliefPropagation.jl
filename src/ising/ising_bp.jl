@@ -16,14 +16,14 @@ function Base.show(io::IO, v::VarIsing)
     print(io, "VarIsing(deg=$(deg(v)), H=$(v.H))")
 end
 
-mutable struct FactorGraphIsing <: FactorGraph
+mutable struct FGIsing
     N::Int
     vnodes::Vector{VarIsing}
     adjlist::Vector{Vector{Int}}
     mags::Vector{Float64}
 end
 
-function FactorGraphIsing(net::Network; T=1)
+function FGIsing(net::Network; T=1)
     @assert has_eprop(net, "J") || has_gprop(net, "J")
     @assert has_vprop(net, "H") || has_gprop(net, "H")
 
@@ -65,10 +65,10 @@ function FactorGraphIsing(net::Network; T=1)
 
     mags = mag.(vnodes)
 
-    FactorGraphIsing(N, vnodes, adjlist, mags)
+    FGIsing(N, vnodes, adjlist, mags)
 end
 
-function initrand!(g::FactorGraphIsing; μ=0, σ=1)
+function initrand!(g::FGIsing; μ=0, σ=1)
     for v in g.vnodes
         for k=1:deg(v)
             v.uin[k] = μ + σ * randn()
@@ -77,7 +77,7 @@ function initrand!(g::FactorGraphIsing; μ=0, σ=1)
     end
 end
 
-function getmess(g::FactorGraph, i, j)
+function getmess(g::FGIsing, i, j)
     ki = findfirst(==(j), g.adjlist[i])
     return g.vnodes[i].uout[ki][]
 end
@@ -92,7 +92,7 @@ function update!(v::VarIsing)
     end
 end
 
-function oneBPiter!(g::FactorGraphIsing)
+function oneBPiter!(g::FGIsing)
     for i in randperm(g.N)
         update!(g.vnodes[i])
     end
@@ -105,7 +105,7 @@ function oneBPiter!(g::FactorGraphIsing)
     return Δ
 end
 
-function converge!(g::FactorGraphIsing; maxiters=1000, ϵ=1e-6, verbose=true)
+function converge!(g::FGIsing; maxiters=1000, ϵ=1e-6, verbose=true)
     for it=1:maxiters
         Δ = oneBPiter!(g)
         verbose && @printf("it=%d  Δ=%.2g \n", it, Δ)
@@ -116,7 +116,7 @@ function converge!(g::FactorGraphIsing; maxiters=1000, ϵ=1e-6, verbose=true)
     end
 end
 
-function corr_conn_nn(g::FactorGraphIsing, i::Int, j::Int)
+function corr_conn_nn(g::FGIsing, i::Int, j::Int)
     @extract g: N vnodes adjlist
     vi = vnodes[i]
     vj = vnodes[j]
@@ -133,9 +133,9 @@ function corr_conn_nn(g::FactorGraphIsing, i::Int, j::Int)
     return c
 end
 
-corr_disc_nn(g::FactorGraphIsing,i::Int,j::Int) = corr_conn_nn(g,i,j) + mag(g.vnodes[i])*mag(g.vnodes[j])
+corr_disc_nn(g::FGIsing,i::Int,j::Int) = corr_conn_nn(g,i,j) + mag(g.vnodes[i])*mag(g.vnodes[j])
 
-function corr_disc_nn(g::FactorGraphIsing)
+function corr_disc_nn(g::FGIsing)
     corrs = [zeros(length(g.adjlist[i])) for i=1:g.N]
     
     for i=1:g.N
@@ -154,7 +154,7 @@ function run_bp(net::Network;
                 σ=1,    # std init messages
                 verbose=true,
                 )
-    g = FactorGraphIsing(net; T)
+    g = FGIsing(net; T)
     initrand!(g; μ, σ)
     converge!(g; maxiters, ϵ, verbose)
     return g

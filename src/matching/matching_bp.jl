@@ -9,14 +9,14 @@ Fact() = Fact(Float64[], Ptr{Float64}[], Int[], Float64[])
 
 deg(f::Fact) = length(f.uin)
 
-mutable struct FactorGraph
+mutable struct FGMatching
     N::Int
     γ::Float64
     fnodes::Vector{Fact}
     adjlist::Vector{Vector{Int}}
 end
 
-function FactorGraph(net::Network; γ=Inf)
+function FGMatching(net::Network; γ=Inf)
     @assert has_eprop(net, "w")
 
     N = nv(net)
@@ -50,10 +50,10 @@ function FactorGraph(net::Network; γ=Inf)
         end
     end
 
-    FactorGraph(N, γ, fnodes, adjlist)
+    FGMatching(N, γ, fnodes, adjlist)
 end
 
-function initrand!(g::FactorGraph)
+function initrand!(g::FGMatching)
     for f in g.fnodes
         for k=1:deg(f)
             f.uin[k] = randn()
@@ -98,7 +98,7 @@ function findmatch(f::Fact)
     return i1, w[i1]
 end
 
-function oneBPiter!(g::FactorGraph)
+function oneBPiter!(g::FGMatching)
     Δ = 0.
     for a in randperm(g.N)
         d = update!(g.fnodes[a])
@@ -107,7 +107,7 @@ function oneBPiter!(g::FactorGraph)
     return Δ
 end
 
-function converge!(g::FactorGraph; maxiters=100, ϵ=1e-8, verbose=true)
+function converge!(g::FGMatching; maxiters=100, ϵ=1e-8, verbose=true)
 
     Eold = 0.
     tstop = 0
@@ -132,7 +132,7 @@ function converge!(g::FactorGraph; maxiters=100, ϵ=1e-8, verbose=true)
     return Eold
 end
 
-function energy(g::FactorGraph)
+function energy(g::FGMatching)
     @extract g: fnodes N adjlist
     E = 0.
     matchmap = zeros(Int, N) 
@@ -164,7 +164,7 @@ function run_bp(net::Network;
                 seed = -1,
                 verbose=true)
     seed > 0 && Random.seed!(seed)
-    g = FactorGraph(net; γ)
+    g = FGMatching(net; γ)
     initrand!(g)
     converge!(g; maxiters, ϵ, verbose)
     E, matchmap, nfails = energy(g)
