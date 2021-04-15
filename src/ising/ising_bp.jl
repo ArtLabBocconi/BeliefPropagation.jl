@@ -106,7 +106,9 @@ function oneBPiter!(g::FGIsing)
 end
 
 function converge!(g::FGIsing; maxiters=1000, ϵ=1e-6, verbose=true)
-    for it=1:maxiters
+    it = 0
+    while it < maxiters
+        it += 1
         Δ = oneBPiter!(g)
         verbose && @printf("it=%d  Δ=%.2g \n", it, Δ)
         if Δ < ϵ
@@ -114,6 +116,7 @@ function converge!(g::FGIsing; maxiters=1000, ϵ=1e-6, verbose=true)
             break
         end
     end
+    return it
 end
 
 function corr_conn_nn(g::FGIsing, i::Int, j::Int)
@@ -156,6 +159,10 @@ function run_bp(net::Network;
                 )
     g = FGIsing(net; T)
     initrand!(g; μ, σ)
-    converge!(g; maxiters, ϵ, verbose)
-    return g
+    iters = converge!(g; maxiters, ϵ, verbose)
+
+    res = (bpgraph = g,
+           mags = g.mags,
+           iters = iters)
+    return res
 end

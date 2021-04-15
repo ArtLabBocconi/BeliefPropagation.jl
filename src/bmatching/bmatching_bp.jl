@@ -192,10 +192,10 @@ function run_bp(net::Network;
     
     res = (energy = E,
            match = matchmap,
+           bpgraph = g,
            num_violations =  nviolations,
            iters = iters,
-           ok = (nviolations == 0),
-           bpgraph = g)
-
+           ok = (nviolations == 0),)
+           
     return res
 end
