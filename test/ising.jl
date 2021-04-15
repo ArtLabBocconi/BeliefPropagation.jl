@@ -21,7 +21,7 @@ end
     vprop!(net, "H", v -> randn())
     res = Ising.run_bp(net, T=T, verbose=false)
 
-    @test fg.mags ≈ tanh.(vprop(net, "H").data ./ T)
+    @test res.mags ≈ tanh.(vprop(net, "H").data ./ T)
 
     ## NO FIELDS, J=1
     T = 2
@@ -33,7 +33,7 @@ end
 
     # X = rrg_to_mcgraph(net)
     # Es, σ, mc_mags = run_monte_carlo(X, β=1/T, infotime=10, sweeps=10^7);
-    # Δ = mean(abs, fg.mags .- mc_mags)
+    # Δ = mean(abs, res.mags .- mc_mags)
     # @test Δ <= 0.01
 end
 
