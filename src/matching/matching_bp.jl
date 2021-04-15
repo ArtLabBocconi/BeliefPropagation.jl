@@ -173,6 +173,6 @@ function run_bp(net::Network;
            bpgraph = g,
            num_violations = nfails,
            iters = iters,
-           ok = (num_violations == 0))
+           ok = (nfails == 0))
     return res
 end
