@@ -108,11 +108,11 @@ function oneBPiter!(g::FGMatching)
 end
 
 function converge!(g::FGMatching; maxiters=100, ϵ=1e-8, verbose=true)
-
     Eold = 0.
     tstop = 0
-    
-    for it=1:maxiters
+    it = 0
+    while it < maxiters
+        it += 1
         Δ = oneBPiter!(g)
         E, matchmap, nfails = energy(g)
         verbose && @printf("it=%d  E=%.5f  nfails=%d \tΔ=%f \n", it, E, nfails, Δ)
@@ -129,7 +129,7 @@ function converge!(g::FGMatching; maxiters=100, ϵ=1e-8, verbose=true)
 
         Eold = E
     end
-    return Eold
+    return Eold, it
 end
 
 function energy(g::FGMatching)
@@ -166,7 +166,13 @@ function run_bp(net::Network;
     seed > 0 && Random.seed!(seed)
     g = FGMatching(net; γ)
     initrand!(g)
-    converge!(g; maxiters, ϵ, verbose)
+    iters = converge!(g; maxiters, ϵ, verbose)
     E, matchmap, nfails = energy(g)
-    return E, matchmap, g, nfails
+    res = (energy = E,
+           match = matchmap,
+           bpgraph = g,
+           num_violations = nfails,
+           iters = iters,
+           ok = (nfails == 0))
+    return res
 end

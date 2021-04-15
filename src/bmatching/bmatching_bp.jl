@@ -17,6 +17,8 @@ mutable struct FGBMatching
     adjlist::Vector{Vector{Int}}
 end
 
+show(io, ::FGBMatching) = show(io, "FGBMatching(...)")
+
 function FGBMatching(net::Network; γ=Inf)
     @assert has_eprop(net, "w")
     @assert has_vprop(net, "b")
@@ -94,11 +96,12 @@ function update!(f::Fact)
     return Δ
 end
 
-function findmatch(f::Fact)
-    @extract f: w uin b
-    h = w .- uin
-    is = topk(h, b, rev=true)    
-    return is, sum(w[is])
+findmatch(f::Fact) = findmatch(f, f.b)
+
+function findmatch(f::Fact, k)
+    h = f.w .- f.uin
+    is = topk(h, k, rev=true)    
+    return is
 end
 
 function oneBPiter!(g::FGBMatching)
@@ -111,16 +114,16 @@ function oneBPiter!(g::FGBMatching)
 end
 
 function converge!(g::FGBMatching; maxiters=100, ϵ=1e-8, verbose=true)
-
     Eold = 0.
     tstop = 0
-    
-    for it=1:maxiters
+    it = 0
+    while it < maxiters
+        it += 1
         Δ = oneBPiter!(g)
-        E, matchmap, nfails = energy(g)
-        verbose && @printf("it=%d  E=%.5f  nfails=%d \tΔ=%f \n", it, E, nfails, Δ)
+        E, matchmap, nviolations = energy(g)
+        verbose && @printf("it=%d  E=%.5f  nviolations=%d \tΔ=%f \n", it, E, nviolations, Δ)
         
-        if abs(Eold - E) < ϵ && nfails == 0
+        if abs(Eold - E) < ϵ && nviolations == 0
             tstop += 1
             if tstop == 10
                 verbose && println("Found ground state")
@@ -132,7 +135,7 @@ function converge!(g::FGBMatching; maxiters=100, ϵ=1e-8, verbose=true)
 
         Eold = E
     end
-    return Eold
+    return Eold, it
 end
 
 function energy(g::FGBMatching)
@@ -141,25 +144,39 @@ function energy(g::FGBMatching)
     matchmap = Vector{Vector{Int}}(undef, N) 
     for i=1:N
         f = fnodes[i]
-        ks, sumw = findmatch(f)
-        E += sumw
+        ks = findmatch(f)
+        E += sum(f.w[ks])
         matchmap[i] = adjlist[i][ks]
     end
     E /= 2
-    nfails = 0
+    nviolations = 0
     for i=1:N
         for j in matchmap[i]
-            nfails += i ∉ matchmap[j]
+            nviolations += i ∉ matchmap[j]
         end
     end
-    return E, matchmap, nfails
+    return E, matchmap, nviolations
 end
 
 """
-Return the optimal cost and the matching map:
-`matchmap[i] = j`  if (i,j) is in the optimal matching.
+    run_bp(net::Network; [γ, maxiters, ϵ, seed, verbose])
 
-The cutoff on the costs is  γ.
+Computes the minimum weight perfect b-matching on graph `net`.
+The input `net` has to contain the edge property `w` and
+the vertex property `b`.
+
+Can optionally impose a cutoff `γ` on the edge costs `w`
+in order to sparsify the graph and improve performance.
+
+The output object contains the following fields:
+
+- `energy`: the optimal cost.
+- `match`: where `match[i]` is the list of neighbors of vertex 
+           `i` in the optimal matching.
+- `iters`: number of iterations performed.
+- `ok`: whether the algorithm was successful or not.    
+- `num_violations`: the number of inconsistencies in the solution. 
+- `bpgraph`: a type storing the BP messages.
 """
 function run_bp(net::Network; 
                 γ = Inf,
@@ -170,7 +187,15 @@ function run_bp(net::Network;
     seed > 0 && Random.seed!(seed)
     g = FGBMatching(net; γ)
     initrand!(g)
-    converge!(g; maxiters, ϵ, verbose)
-    E, matchmap, nfails = energy(g)
-    return E, matchmap, g, nfails
+    E, iters = converge!(g; maxiters, ϵ, verbose)
+    E, matchmap, nviolations = energy(g)
+    
+    res = (energy = E,
+           match = matchmap,
+           bpgraph = g,
+           num_violations =  nviolations,
+           iters = iters,
+           ok = (nviolations == 0),)
+           
+    return res
 end
