@@ -80,7 +80,7 @@ function topk(x, k; rev=false)
 end
 
 function update!(f::Fact)
-    @extract f: w uin uout b
+    @unpack w, uin, uout, b = f
     h = w .- uin
     is = topk(h, b+1, rev=true)
     m1 = h[is[b]]
@@ -139,7 +139,7 @@ function converge!(g::FGBMatching; maxiters=100, ϵ=1e-8, verbose=true)
 end
 
 function energy(g::FGBMatching)
-    @extract g: fnodes N adjlist
+    @unpack fnodes, N, adjlist = g
     E = 0.
     matchmap = Vector{Vector{Int}}(undef, N) 
     for i=1:N

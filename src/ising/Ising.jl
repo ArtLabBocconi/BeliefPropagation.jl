@@ -2,7 +2,7 @@ module Ising
 
 using Erdos
 using Random, Statistics
-using ExtractMacro
+using UnPack
 using Printf
 
 export run_bp

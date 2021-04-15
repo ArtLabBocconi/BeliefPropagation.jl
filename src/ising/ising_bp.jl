@@ -83,7 +83,7 @@ function getmess(g::FGIsing, i, j)
 end
 
 function update!(v::VarIsing)
-    @extract v: uin uout tJ
+    @unpack uin, uout, tJ = v
     v.htot = sum(uin) + v.H
     for k=1:deg(v)
         hcav = v.htot - uin[k]
@@ -120,7 +120,7 @@ function converge!(g::FGIsing; maxiters=1000, ϵ=1e-6, verbose=true)
 end
 
 function corr_conn_nn(g::FGIsing, i::Int, j::Int)
-    @extract g: N vnodes adjlist
+    @unpack N, vnodes, adjlist = g
     vi = vnodes[i]
     vj = vnodes[j]
     ki = findfirst(==(j), adjlist[i])

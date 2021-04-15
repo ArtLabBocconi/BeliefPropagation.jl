@@ -62,7 +62,7 @@ function initrand!(g::FGMatching)
 end
 
 function update!(f::Fact)
-    @extract f: w uin uout
+    @unpack w, uin, uout = f
     m1 = m2 = Inf
     i1 = 0
     for i=1:deg(f)
@@ -85,7 +85,7 @@ function update!(f::Fact)
 end
 
 function findmatch(f::Fact)
-    @extract f: w uin
+    @unpack w, uin = f
     m1 = Inf
     i1 = 0
     for i=1:deg(f)
@@ -133,7 +133,7 @@ function converge!(g::FGMatching; maxiters=100, ϵ=1e-8, verbose=true)
 end
 
 function energy(g::FGMatching)
-    @extract g: fnodes N adjlist
+    @unpack fnodes, N, adjlist = g
     E = 0.
     matchmap = zeros(Int, N) 
     for i=1:N

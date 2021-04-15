@@ -2,7 +2,7 @@
 module BMatching
 using Random, Statistics
 
-using ExtractMacro
+using UnPack
 using Printf
 using Erdos
 
