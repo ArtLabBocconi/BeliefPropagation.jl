@@ -3,16 +3,16 @@ N = 100
 net = CompleteBipartiteGraph(N, N, Network)
 eprop!(net, "w", e -> rand())
 vprop!(net, "b", v -> 1)
-E, matchmap, g, nfails = Matching.run_bp(net, maxiters=100, verbose=false)
-E, bmatchmap, g, nfails = BMatching.run_bp(net, maxiters=100, verbose=false)
-bmatchmap = [m[1] for m in bmatchmap]
-@test all(bmatchmap .== matchmap)
+res_match = Matching.run_bp(net, maxiters=100, verbose=false)
+res_bmatch = BMatching.run_bp(net, maxiters=100, verbose=false)
+bmatchmap = [m[1] for m in res_bmatch.match]
+@test all(bmatchmap .== res_match.match)
 
 Random.seed!(17)
 N = 100
 net = CompleteGraph(N, Network)
 eprop!(net, "w", e -> rand())
 vprop!(net, "b", v -> rand(1:5))
-E, σ, g, nfails = BMatching.run_bp(net, maxiters=100, verbose=false)
-# @test nfails == 0 # no violated constraints
-@test nfails <= 1 # = 0 on Julia 1.6
+res = BMatching.run_bp(net, maxiters=100, verbose=false)
+@test res.num_violations <= 1 # = 0 on Julia 1.6
+@test res.iters <= 100

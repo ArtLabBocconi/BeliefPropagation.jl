@@ -168,5 +168,8 @@ function run_bp(net::Network;
     initrand!(g)
     converge!(g; maxiters, ϵ, verbose)
     E, matchmap, nfails = energy(g)
-    return E, matchmap, g, nfails
+    res = (energy = E,
+           match = matchmap,
+           num_violations = nfails)
+    return res
 end
