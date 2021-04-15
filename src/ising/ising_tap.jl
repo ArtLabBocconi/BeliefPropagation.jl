@@ -33,7 +33,7 @@ function initrand!(g::TAPGraphIsing; μ=0, σ=1)
 end
 
 function oneTAPiter!(g::TAPGraphIsing; dump=0.1)
-    @extract g: N J H m m_old
+    @unpack N, J, H, m, m_old = g
     Δ = 0.
     mnew = zeros(N)
     for i=1:N
@@ -67,7 +67,7 @@ function converge!(g::TAPGraphIsing; maxiters::Int=1000,
 end
 
 function corr_disc_nn(g::TAPGraphIsing, i::Int, j::Int)
-    @extract g: N adjlist m
+    @unpack N, adjlist, m = g
     ki = findfirst(adjlist[i], j)
     kj = findfirst(adjlist[j], i)
     @assert(ki > 0)
